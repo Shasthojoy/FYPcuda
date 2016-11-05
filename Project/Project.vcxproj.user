@@ -3,7 +3,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerEnvironment>PATH=C:\Program Files\MATLAB\R2016a\bin\win64
+    <LocalDebuggerEnvironment>PATH=C:\Program Files\MATLAB\R2016a\bin\win64;C:\OpenCV\opencv\build\x64\vc12\bin
 $(LocalDebuggerEnvironment)</LocalDebuggerEnvironment>
     <LocalDebuggerCommand>$(TargetPath)</LocalDebuggerCommand>
   </PropertyGroup>

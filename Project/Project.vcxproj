@@ -150,12 +150,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="program_exception.cpp" />
     <ClCompile Include="readmat.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\x64\Debug\test.mat" />
-  </ItemGroup>
-  <ItemGroup>
+    <ClInclude Include="program_exception.h" />
     <ClInclude Include="readmat.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

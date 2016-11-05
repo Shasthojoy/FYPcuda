@@ -21,14 +21,15 @@
     <ClCompile Include="readmat.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\x64\Debug\test.mat">
+    <ClCompile Include="program_exception.cpp">
       <Filter>Source Files</Filter>
-    </None>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="readmat.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="program_exception.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

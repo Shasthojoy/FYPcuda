@@ -3,7 +3,7 @@
 #include "mat.h"
 #include "matrix.h"
 #include "mex.h"
-
+#include "program_exception.h"
 
 
 class readmat
@@ -20,7 +20,7 @@ private:
 	const char *name;
 	bool isdouble;
 	void getmxpointer();
-	
+	no_mat_exception noMAT;
 public:
 	
 	//with default value
