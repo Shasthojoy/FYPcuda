@@ -150,7 +150,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
-    <ClCompile Include="program_exception.cpp" />
     <ClCompile Include="readmat.cpp" />
   </ItemGroup>
   <ItemGroup>
