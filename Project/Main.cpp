@@ -4,7 +4,7 @@
 #include <string.h> /* For strcmp() */
 #include <stdlib.h> /* For EXIT_FAILURE, EXIT_SUCCESS */
 #include <vector> /* For STL */
-#include <algorithm>
+#include <algorithm>//test COMMENT
 #include "readmat.h"
 #include <math.h>
 #include <valarray>
