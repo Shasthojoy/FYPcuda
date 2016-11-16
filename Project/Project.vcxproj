@@ -156,6 +156,10 @@
     <ClInclude Include="program_exception.h" />
     <ClInclude Include="readmat.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="cudaloading.cu" />
+    <None Include="cudaloading.cuh" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
