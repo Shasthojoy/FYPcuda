@@ -11,7 +11,7 @@ private:
 	const size_t* dimensionpointer;
 
 public:
-	cudaloading(readmat& MAT);
+	cudaloading(const readmat& MAT);
 	void cudaprepareInt();
 
 
