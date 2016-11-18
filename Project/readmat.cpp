@@ -9,10 +9,6 @@ using namespace std;
 readmat::readmat(const char *f)
 {
 	file = f;
-}
-
-void readmat::getmxpointer()
-{
 	pmat = matOpen(file, "r");
 	if (pmat == NULL) {
 		throw noMAT;
@@ -38,62 +34,43 @@ void readmat::getmxpointer()
 			}
 			else
 			{
-				for (int q = 0; q < 1; q++)
-				{
-					painfo = matGetNextVariableInfo(pmat, &name);
-
-				}
+				painfo = matGetNextVariableInfo(pmat, &name);
 				matClose(pmat);
 			}
-
+			pmat = matOpen(file, "r");
+			if (pmat == NULL) {
+				throw noMAT;
+			}
+			else
+			{
+				pa = matGetNextVariable(pmat, &name1);
+				matClose(pmat);
+			}
 		}
 
 	}
 
-
 }
 
-int readmat::getnumbrofdimensions()
+
+
+int readmat::getnumbrofdimensions() const
 {
 
-	getmxpointer();
 	return mxGetNumberOfDimensions(painfo);
-
-
-
 }
 
-double * readmat::getarraypointer()
+double * readmat::getarraypointer() const
 {
-	pmat = matOpen(file, "r");
-	if (pmat == NULL) {
-		throw noMAT;
-	}
-	else
-	{
-		for (int q = 0; q < 1; q++)
-		{
-
-			pa = matGetNextVariable(pmat, &name);
-		}
 		return mxGetPr(pa);
-	}
-
-
 }
 
-const size_t*  readmat::dimensionpointer()
+const size_t*  readmat::dimensionpointer() const
 {
-
-	getmxpointer();
-	dimarray = mxGetDimensions(painfo);
-	return dimarray;
-
+	return mxGetDimensions(painfo);
 }
 
-int readmat::numberofelements()
+int readmat::numberofelements() const
 {
-	getmxpointer();
 	return mxGetNumberOfElements(painfo);
-
 }
