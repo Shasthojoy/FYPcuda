@@ -13,27 +13,27 @@ private:
 	const char **dir;
 	MATFile *pmat;
 	int	ndir;
-	mxArray *painfo,*pa;
+	mxArray *painfo, *pa;
 	const char *file;
 	int minute;
 	int second;
 	const char *name;
+	const char *name1;
 	bool isdouble;
-	void getmxpointer();
 	no_mat_exception noMAT;
 public:
-	
+
 	//with default value
 	readmat(const char *f);
 	//	get number of dimensions
-	int getnumbrofdimensions();
+	int getnumbrofdimensions() const;
 	// get pointer to array
-	double* getarraypointer();
+	double*  getarraypointer() const;
 	// get pointer to each dimension size
-	const size_t* dimensionpointer();
+	const size_t* dimensionpointer() const;
 	//number of elements
-	int numberofelements();
-	
+	int numberofelements() const;
+
 
 };
 
