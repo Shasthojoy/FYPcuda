@@ -6,7 +6,6 @@
 #include <vector> /* For STL */
 #include <algorithm>
 #include "readmat.h"
-#include <math.h>
 #include <valarray>
 #include "opencv2/highgui/highgui.hpp"
 #include <ctime>
