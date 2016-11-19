@@ -161,10 +161,11 @@
   <ItemGroup>
     <CudaCompile Include="cudaloading.cu">
       <FileType>Document</FileType>
+      <TargetMachinePlatform Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">64</TargetMachinePlatform>
     </CudaCompile>
-    <CudaCompile Include="cudaloading.cuh">
+    <ClInclude Include="cudaloading.cuh">
       <FileType>Document</FileType>
-    </CudaCompile>
+    </ClInclude>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
