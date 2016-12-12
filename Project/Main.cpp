@@ -10,13 +10,31 @@
 #include <valarray>
 #include "opencv2/highgui/highgui.hpp"
 #include <ctime>
+#include "omp.h"
 using namespace std;
 using namespace cv;
+
+typedef struct {
+	size_t X;
+	size_t Y;
+	size_t U;
+	size_t V;
+	//double* elements;
+
+} DataIn;
+
+inline double getelement(DataIn data, int x, int v, int u, int y, double * __restrict dataElements)
+{
+	int index = data.X*data.Y*data.U*(v)+data.X*data.Y*(u)+data.X*(y)+x;
+	return dataElements[index];
+}
+
+
 int main()
 {
 	const clock_t begin_time = clock();
 	int i;
-	int m;
+	
 	int elements;
 	int numberofdimension;
 	double* arraypint;
@@ -32,207 +50,77 @@ int main()
 
 
 		cout << "The dimensions are  ";
-		for (m = 0; m < numberofdimension; m++)
+		for (int k = 0; k < numberofdimension; k++)
 		{
-			cout << *(dimepointer + m);
+			cout << *(dimepointer + k);
 			cout << "  ";
 		}
-
-		// Dimensions
-
-		size_t X, Y, U, V;
-		X = *(dimepointer);
-		Y = *(dimepointer + 1);
-		U = *(dimepointer + 2);
-		V = *(dimepointer + 3);
-		// Dimensions end
-
-		vector<vector<vector <double*>>> image4d;
-		image4d.resize(Y);
-		for (int y = 0; y < Y; y++)
-		{
-			image4d[y].resize(V);
-			for (int v = 0; v < V; v++)
-				image4d[y][v].resize(X*U);
-		}
-
-		//get values matlab
-		arraypint = thismat.getarraypointer();
 		elements = thismat.numberofelements();
+		// Dimensions
+		DataIn data;
+		size_t X, Y, U, V;
+		data.X = *(dimepointer);
+		data.Y = *(dimepointer + 1);
+		data.U = *(dimepointer + 2);
+		data.V = *(dimepointer + 3);
+		double* dataelements;
+		dataelements = thismat.getarraypointer();
+		double temp_sum;
+		float*  __restrict image = new float[data.U*data.V];
+		int m = 0;
+		// Dimensions end
+		int X_shift, Y_shift;
 
-		// Assigning values
-		int index;
-
-		for (int v = 0; v < V; v++)
-		{
-			for (int y = 0; y < Y; y++)
+			for (int u = 0; u < data.U; u++)
 			{
-				for (int u = 0; u < U; u++)
+				for (int v = 0; v < data.V; v++)
 				{
-					// index start
-					//index_end = index_start + (X - 1);
-					for (int x = 0; x < X; x++)
+					temp_sum = 0;
+					for (int x = 0; x < data.X; x++)
 					{
-						index = X*Y*U*(v)+X*Y*(u)+X*(y)+x;
-						image4d[y][v][x*U + u] = index + arraypint;
+						X_shift = x*m;
+//#pragma omp parallel for
+						for (int y = 0; y < data.Y; y++)
+						{
+							Y_shift = y*m;
+							if (v < Y_shift && u < X_shift){
+								temp_sum += getelement(data, x, (data.V - (Y_shift - v)), (data.U - (X_shift - u)), y, dataelements);
 
+
+							}
+
+
+							else if (v >= Y_shift && u < X_shift){
+								temp_sum += getelement(data, x, (v - (Y_shift)), (data.U - (X_shift - u)), y, dataelements);
+
+							}
+
+							else if (v < Y_shift &&  u >= X_shift){
+								temp_sum += getelement(data, x, (data.V - (Y_shift - v)), (u - (X_shift)), y, dataelements);
+
+							}
+
+							else if (v >= Y_shift && u >= X_shift){
+								temp_sum += getelement(data, x, (v - (Y_shift)), (u - (X_shift)), y, dataelements);
+
+							}
+
+
+						}
 
 					}
+					*(image + (u*data.V) + v) = temp_sum / (data.X*data.Y * 255);
 				}
 			}
-		}
+		cout << "data is" << endl;
+		for (int t = 0; t < 15; t++)
+			cout << image[t] << " ";
 		
-
-		// preprocessing data for shift the columns
-		vector <signed int> shiftcolvector;
-		int x, u;
-
-		//vector<vector <int*>> column_shift_data;
-		//column_shift_data.resize(Y);
-		valarray<valarray<double**>> column_shift_data;
-		column_shift_data.resize(Y);
-
-		int alpha = 1;
-		int m_shift = alpha - 1;
-		int temp;
-
-		for (int y = 0; y < Y; y++)
-		{
-			temp = round(y*m_shift);
-			shiftcolvector.push_back(temp);
-			//cout << "data shift " << round(y*m_shift);
-			//cout << "data shift real " << shiftcolvector[y];
-		}
-
-		//shift the pointers
-		for (int y = 0; y < Y; y++)
-		{
-			column_shift_data[y].resize(V);
-			for (int v = 0; v < V; v++)
-			{
-				column_shift_data[y][v] = image4d[y][v].data();
-			}
-			// shift the pointers
-			//rotate(column_shift_data[y].begin(), column_shift_data[y].begin() - shiftcolvector[y], column_shift_data[y].end());
-			column_shift_data[y] = column_shift_data[y].cshift(-shiftcolvector[y]);
-		}
-		//take the sum
-		vector<vector <vector<double>>> sum_data;
-		sum_data.resize(X);
-		for (int x = 0; x < X; x++)
-		{
-			sum_data[x].resize(U);
-			for (int u = 0; u < U; u++)
-			{
-				sum_data[x][u].resize(V);
-			}
-
-		}
-
-		for (int xu = 0; xu < X*U; xu++)
-		{
-			for (int v = 0; v < V; v++)
-			{
-				x = xu / U;
-				u = xu % U;
-				sum_data[x][u][v] = 0;
-				for (int y = 0; y < Y; y++)
-				{
-					sum_data[x][u][v] = **(column_shift_data[y][v] + xu) + sum_data[x][u][v];
-				}
-			}
-		}
-		//print the sum
-		/*
-		cout << "\nThis is the SUM column start\n";
-		for (int x = 0; x < X; x++)
-		{
-		for (int u = 0; u < U; u++)
-		{
-		for (int v = 0; v < V; v++)
-
-		{
-		cout << " " << sum_data[x][u][v];
-		}
-		cout << "\n";
-		}
-		cout << "\n";
-		}
-		cout << "\nThis is the SUM column\n";
-		*/
-		// data is in format to shift and take sum along y axis. create 2d pointer array and then shift the pointers and take sum to a 2d array.
-		vector<signed int>shiftrowvector;
-
-		for (int x = 0; x < X; x++){
-
-			temp = round(x*m_shift);
-			shiftrowvector.push_back(temp);
-
-		}
-
-		//shift along u dimension
-
-		valarray<valarray<double*>>row_shift_data;
-
-		row_shift_data.resize(X);
-
-		for (int x = 0; x < X; x++)
-		{
-			row_shift_data[x].resize(U);
-			for (int u = 0; u < U; u++)
-			{
-				row_shift_data[x][u] = sum_data[x][u].data();//2d array of pointers pointing to the rows
-				//cout << "\nthis is pointer\n" << *(row_shift_data[x][u]);
-			}
-
-			row_shift_data[x] = row_shift_data[x].cshift(-shiftrowvector[x]);//shift the images along u
-
-
-		}
-
-		//create the image matrix
-
-		float* image = new float[U*V];
-		//for (int i = 0; i < U; ++i)
-		//image[i] = new double[V];
-
-		//sum along the third dimension in sum_data
-
-		for (int u = 0; u < U; u++)
-		{
-			for (int v = 0; v < V; v++)
-			{
-
-				*(image + (u*V) + v) = 0;
-				for (int x = 0; x < X; x++)
-				{
-					*(image + (u*V) + v) = *(row_shift_data[x][u] + v) + *(image + (u*V) + v);// sum along the rows
-				}
-				*(image + (u*V) + v) = *(image + (u*V) + v) / (X*Y * 255);
-			}
-		}
-
-		//print the image
-		/*
-		cout << "\n";
-
-		for (int u = 0; u < U; u++)
-		{
-		for (int v = 0; v < V; v++)
-		{
-		cout << " " << image[(u*V) + v];
-		}
-		cout << "\n";
-		}
-
-		*/
-
-
 		cout << "The end of array \n FINISHED\n";
 
 
 
-		out = Mat(U, V, CV_32FC1, image); //create an image
+		out = Mat(data.U, data.V, CV_32FC1, image); //create an image
 		//cout << "out = " << endl << " " << out << endl << endl;
 		if (out.empty()) //check whether the image is loaded or not
 		{
