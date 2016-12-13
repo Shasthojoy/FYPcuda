@@ -78,7 +78,7 @@ int main()
 			{
 				for (int u = 0; u < data.U; u++)
 				{
-					double temp_sum = 0;
+					double *temp_sum = new double[data.X*data.Y];
 					for (int x = 0; x < data.X; x++)
 					{
 						X_shift = x*m;
@@ -87,24 +87,24 @@ int main()
 						{
 							Y_shift = y*m;
 							if (v < Y_shift && u < X_shift){
-								temp_sum += getelement(data, x, (data.V - (Y_shift - v)), (data.U - (X_shift - u)), y, dataelements);
+								*(temp_sum + (data.Y*x + y)) = getelement(data, x, (data.V - (Y_shift - v)), (data.U - (X_shift - u)), y, dataelements);
 
 
 							}
 
 
 							else if (v >= Y_shift && u < X_shift){
-								temp_sum += getelement(data, x, (v - (Y_shift)), (data.U - (X_shift - u)), y, dataelements);
+								*(temp_sum + (data.Y*x + y)) = getelement(data, x, (v - (Y_shift)), (data.U - (X_shift - u)), y, dataelements);
 
 							}
 
 							else if (v < Y_shift &&  u >= X_shift){
-								temp_sum += getelement(data, x, (data.V - (Y_shift - v)), (u - (X_shift)), y, dataelements);
+								*(temp_sum + (data.Y*x + y)) = getelement(data, x, (data.V - (Y_shift - v)), (u - (X_shift)), y, dataelements);
 
 							}
 
 							else if (v >= Y_shift && u >= X_shift){
-								temp_sum += getelement(data, x, (v - (Y_shift)), (u - (X_shift)), y, dataelements);
+								*(temp_sum + (data.Y*x + y)) = getelement(data, x, (v - (Y_shift)), (u - (X_shift)), y, dataelements);
 
 							}
 
@@ -112,10 +112,7 @@ int main()
 						}
 
 					}
-                   //#pragma omp atomic
-					{
-						*(image + (u*data.V) + v) = temp_sum / (data.X*data.Y * 255);
-					}
+                   
 					
 				}
 			}
@@ -127,7 +124,10 @@ int main()
 
 
 		 end = omp_get_wtime();
-		cout << "\n The wall time : " << (end - start);
+		 cout << "\n The wall time : " << (end - start);
+
+		 /*
+		
 		out = Mat(data.U, data.V, CV_32FC1, image); //create an image
 		//cout << "out = " << endl << " " << out << endl << endl;
 		if (out.empty()) //check whether the image is loaded or not
@@ -146,7 +146,7 @@ int main()
 		waitKey(0);  //wait infinite time for a keyress
 
 		destroyWindow("Refocused Image"); //destroy the window with the name, "MyWindow"*/
-
+		 
 
 
 
@@ -157,7 +157,8 @@ int main()
 		cout << "The array elements ";
 		cout << elements;
 		cout << endl;
-
+		int h;
+		cin >> h;
 		for (int n = 0; n < elements; n++)
 		{
 			//cout << *(arraypint + n);
