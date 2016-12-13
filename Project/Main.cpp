@@ -34,7 +34,9 @@ int main()
 {
 	const clock_t begin_time = clock();
 	int i;
-	
+	double start, end;
+		
+	start = omp_get_wtime();
 	int elements;
 	int numberofdimension;
 	double* arraypint;
@@ -65,21 +67,22 @@ int main()
 		data.V = *(dimepointer + 3);
 		double* dataelements;
 		dataelements = thismat.getarraypointer();
-		double temp_sum;
+		//double temp_sum;
 		float*  __restrict image = new float[data.U*data.V];
 		int m = 0;
 		// Dimensions end
 		int X_shift, Y_shift;
-
+		//
+#pragma omp parallel for collapse(2) num_threads(4) schedule(monotonic:dynamic,1) shared(image)
 			for (int u = 0; u < data.U; u++)
 			{
 				for (int v = 0; v < data.V; v++)
 				{
-					temp_sum = 0;
+					double temp_sum = 0;
 					for (int x = 0; x < data.X; x++)
 					{
 						X_shift = x*m;
-//#pragma omp parallel for
+
 						for (int y = 0; y < data.Y; y++)
 						{
 							Y_shift = y*m;
@@ -109,7 +112,11 @@ int main()
 						}
 
 					}
-					*(image + (u*data.V) + v) = temp_sum / (data.X*data.Y * 255);
+                   //#pragma omp critical
+					{
+						*(image + (u*data.V) + v) = temp_sum / (data.X*data.Y * 255);
+					}
+					
 				}
 			}
 		cout << "data is" << endl;
@@ -119,7 +126,8 @@ int main()
 		cout << "The end of array \n FINISHED\n";
 
 
-
+		 end = omp_get_wtime();
+		cout << "\n The wall time : " << (end - start);
 		out = Mat(data.U, data.V, CV_32FC1, image); //create an image
 		//cout << "out = " << endl << " " << out << endl << endl;
 		if (out.empty()) //check whether the image is loaded or not
@@ -162,7 +170,7 @@ int main()
 	}
 
 
-	cin >> i;
+	//cin >> i;
 	return 0;
 
 }
