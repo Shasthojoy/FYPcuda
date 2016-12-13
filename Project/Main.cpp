@@ -67,16 +67,16 @@ int main()
 		data.V = *(dimepointer + 3);
 		double* dataelements;
 		dataelements = thismat.getarraypointer();
-		//double temp_sum;
+		
 		float*  __restrict image = new float[data.U*data.V];
 		int m = 0;
-		// Dimensions end
+		
 		int X_shift, Y_shift;
-		//
-#pragma omp parallel for collapse(2) num_threads(4) schedule(monotonic:dynamic,1) shared(image)
-			for (int u = 0; u < data.U; u++)
+		
+#pragma omp parallel for collapse(2) num_threads(4) schedule(monotonic:dynamic) shared(image)
+		for (int v = 0; v < data.V; v++)
 			{
-				for (int v = 0; v < data.V; v++)
+				for (int u = 0; u < data.U; u++)
 				{
 					double temp_sum = 0;
 					for (int x = 0; x < data.X; x++)
@@ -112,7 +112,7 @@ int main()
 						}
 
 					}
-                   //#pragma omp critical
+                   //#pragma omp atomic
 					{
 						*(image + (u*data.V) + v) = temp_sum / (data.X*data.Y * 255);
 					}
@@ -140,7 +140,7 @@ int main()
 
 
 
-		namedWindow("Refocused Image", CV_WINDOW_AUTOSIZE); //create a window with the name "MyWindow"
+		//namedWindow("Refocused Image", CV_WINDOW_AUTOSIZE); //create a window with the name "MyWindow"
 		imshow("Refocused Image", out); //display the image which is stored in the 'img' in the "MyWindow" window
 
 		waitKey(0);  //wait infinite time for a keyress
