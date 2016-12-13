@@ -23,10 +23,10 @@ typedef struct {
 
 } DataIn;
 
-inline double getelement(DataIn data, int x, int v, int u, int y, double * __restrict dataElements)
+inline float getelement(DataIn data, int x, int v, int u, int y, double * __restrict dataElements)
 {
 	int index = data.X*data.Y*data.U*(v)+data.X*data.Y*(u)+data.X*(y)+x;
-	return dataElements[index];
+	return (float)dataElements[index];
 }
 
 
@@ -34,9 +34,9 @@ int main()
 {
 	const clock_t begin_time = clock();
 	int i;
-	double start, end;
+	double start, end,start1;
 		
-	start = omp_get_wtime();
+	start1 = omp_get_wtime();
 	int elements;
 	int numberofdimension;
 	double* arraypint;
@@ -72,39 +72,49 @@ int main()
 		int m = 0;
 		
 		int X_shift, Y_shift;
-		
-#pragma omp parallel for collapse(2) num_threads(4) schedule(monotonic:dynamic) shared(image)
-		for (int v = 0; v < data.V; v++)
+		omp_set_dynamic(0);
+		omp_set_num_threads(4);
+		start = omp_get_wtime();
+#pragma omp parallel
+		{
+			float temp_sum;
+			int id = omp_get_thread_num();
+			int num_threads = omp_get_num_threads();
+			std::cout << "thread is " << id << endl;
+
+			for (int v = 0; v < data.V; v += num_threads)
 			{
 				for (int u = 0; u < data.U; u++)
 				{
-					double temp_sum = 0;
-					for (int x = 0; x < data.X; x++)
-					{
-						X_shift = x*m;
+					temp_sum = 0;
 
-						for (int y = 0; y < data.Y; y++)
+					for (int y = 0; y < data.Y; y++)
+					{
+						Y_shift = y*m;
+
+						for (int x = 0; x < data.X; x++)
 						{
-							Y_shift = y*m;
+							
+							X_shift = x*m;
 							if (v < Y_shift && u < X_shift){
-								temp_sum += getelement(data, x, (data.V - (Y_shift - v)), (data.U - (X_shift - u)), y, dataelements);
+								temp_sum += getelement(data, x, (data.V - (Y_shift - (v + id))), (data.U - (X_shift - u)), y, dataelements);
 
 
 							}
 
 
 							else if (v >= Y_shift && u < X_shift){
-								temp_sum += getelement(data, x, (v - (Y_shift)), (data.U - (X_shift - u)), y, dataelements);
+								temp_sum += getelement(data, x, ((v + id) - (Y_shift)), (data.U - (X_shift - u)), y, dataelements);
 
 							}
 
 							else if (v < Y_shift &&  u >= X_shift){
-								temp_sum += getelement(data, x, (data.V - (Y_shift - v)), (u - (X_shift)), y, dataelements);
+								temp_sum += getelement(data, x, (data.V - (Y_shift - (v + id))), (u - (X_shift)), y, dataelements);
 
 							}
 
 							else if (v >= Y_shift && u >= X_shift){
-								temp_sum += getelement(data, x, (v - (Y_shift)), (u - (X_shift)), y, dataelements);
+								temp_sum += getelement(data, x, ((v + id) - (Y_shift)), (u - (X_shift)), y, dataelements);
 
 							}
 
@@ -112,13 +122,14 @@ int main()
 						}
 
 					}
-                   //#pragma omp atomic
+					//#pragma omp critical
 					{
-						*(image + (u*data.V) + v) = temp_sum / (data.X*data.Y * 255);
+						*(image + (u*data.V) + (v + id)) = temp_sum / (data.X*data.Y * 255);
 					}
-					
+
 				}
 			}
+		}
 		cout << "data is" << endl;
 		for (int t = 0; t < 15; t++)
 			cout << image[t] << " ";
@@ -127,7 +138,8 @@ int main()
 
 
 		 end = omp_get_wtime();
-		cout << "\n The wall time : " << (end - start);
+		std::cout << "\n The wall time algo: " << (end - start)<<endl;
+		std::cout << "\n The wall time: " << (end - start1) << endl;
 		out = Mat(data.U, data.V, CV_32FC1, image); //create an image
 		//cout << "out = " << endl << " " << out << endl << endl;
 		if (out.empty()) //check whether the image is loaded or not
