@@ -1,9 +1,9 @@
 #include "mat.h"
 #include <iostream>
 #include <stdio.h>
-#include <string.h> /* For strcmp() */
-#include <stdlib.h> /* For EXIT_FAILURE, EXIT_SUCCESS */
-#include <vector> /* For STL */
+#include <string.h> 
+#include <stdlib.h> 
+#include <vector> 
 #include <algorithm>
 #include "readmat.h"
 #include <math.h>
@@ -19,7 +19,7 @@ typedef struct {
 	size_t Y;
 	size_t U;
 	size_t V;
-	//double* elements;
+	
 
 } DataIn;
 
@@ -39,7 +39,7 @@ int main()
 	start1 = omp_get_wtime();
 	int elements;
 	int numberofdimension;
-	double* arraypint;
+	
 	const char *file = "Bracelet.mat";
 	const size_t* dimepointer;
 	Mat out;
@@ -58,26 +58,29 @@ int main()
 			cout << "  ";
 		}
 		elements = thismat.numberofelements();
+		
 		// Dimensions
-		DataIn data;
-		size_t X, Y, U, V;
+		static DataIn data;
 		data.X = *(dimepointer);
 		data.Y = *(dimepointer + 1);
 		data.U = *(dimepointer + 2);
 		data.V = *(dimepointer + 3);
+		
 		double* dataelements;
 		dataelements = thismat.getarraypointer();
 		
 		float*  __restrict image = new float[data.U*data.V];
-		int m = 0;
+		static int m = 1;
 		
-		int X_shift, Y_shift;
-		omp_set_dynamic(0);
+		
+		//omp_set_dynamic(0);
 		omp_set_num_threads(4);
 		start = omp_get_wtime();
 #pragma omp parallel
 		{
+
 			float temp_sum;
+			int X_shift, Y_shift;
 			int id = omp_get_thread_num();
 			int num_threads = omp_get_num_threads();
 			std::cout << "thread is " << id << endl;
@@ -96,24 +99,24 @@ int main()
 						{
 							
 							X_shift = x*m;
-							if (v < Y_shift && u < X_shift){
+							if ((v + id) < Y_shift && u < X_shift){
 								temp_sum += getelement(data, x, (data.V - (Y_shift - (v + id))), (data.U - (X_shift - u)), y, dataelements);
 
 
 							}
 
 
-							else if (v >= Y_shift && u < X_shift){
+							else if ((v + id) >= Y_shift && u < X_shift){
 								temp_sum += getelement(data, x, ((v + id) - (Y_shift)), (data.U - (X_shift - u)), y, dataelements);
 
 							}
 
-							else if (v < Y_shift &&  u >= X_shift){
+							else if ((v + id) < Y_shift &&  u >= X_shift){
 								temp_sum += getelement(data, x, (data.V - (Y_shift - (v + id))), (u - (X_shift)), y, dataelements);
 
 							}
 
-							else if (v >= Y_shift && u >= X_shift){
+							else if ((v + id) >= Y_shift && u >= X_shift){
 								temp_sum += getelement(data, x, ((v + id) - (Y_shift)), (u - (X_shift)), y, dataelements);
 
 							}
@@ -141,18 +144,17 @@ int main()
 		std::cout << "\n The wall time algo: " << (end - start)<<endl;
 		std::cout << "\n The wall time: " << (end - start1) << endl;
 		out = Mat(data.U, data.V, CV_32FC1, image); //create an image
-		//cout << "out = " << endl << " " << out << endl << endl;
+		
 		if (out.empty()) //check whether the image is loaded or not
 		{
 			cout << "Error : Image cannot be loaded..!!" << endl;
-			//system("pause"); //wait for a key press
 			return -1;
 		}
 		std::cout << float(clock() - begin_time) / CLOCKS_PER_SEC;
 
 
 
-		//namedWindow("Refocused Image", CV_WINDOW_AUTOSIZE); //create a window with the name "MyWindow"
+		
 		imshow("Refocused Image", out); //display the image which is stored in the 'img' in the "MyWindow" window
 
 		waitKey(0);  //wait infinite time for a keyress
