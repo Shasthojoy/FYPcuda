@@ -107,3 +107,8 @@ artifacts/
 *.pidb
 *.svclog
 *.scc
+
+#performance measurement
+My Amplifier XE Results - Project/
+My Inspector Results - Project/
+My Advisor Results - Project/

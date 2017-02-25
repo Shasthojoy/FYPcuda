@@ -4,7 +4,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <iostream>
+#include <thrust/system_error.h>
+#include <thrust/system/cuda/error.h>
 using namespace std;
+
+
+
 class no_mat_exception : public exception
 {
 	virtual const char* what() const throw()
@@ -16,22 +21,16 @@ class no_mat_exception : public exception
 
 };
 
-class device_operation_exception
+class device_exception
 {
-private:
-	string errorMessage;
 public:
-	device_operation_exception(string Error_message)
+	device_exception();
+
+	void throw_cuda_error(cudaError_t code)
 	{
-		errorMessage = Error_message;
+		if (code != cudaSuccess)
+		throw thrust::system_error(code, thrust::cuda_category());
 	}
-	string what() const throw()
-	{
-
-		return errorMessage;
-
-	}
-
 };
 
 

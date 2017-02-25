@@ -67,6 +67,8 @@
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="Matlabopencv.props" />
+    <Import Project="Cuda.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -160,11 +162,11 @@
     <ClInclude Include="readmat.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="cudaloading.cu">
+    <CudaCompile Include="CudaAccelerator.cu">
       <FileType>Document</FileType>
       <TargetMachinePlatform Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">64</TargetMachinePlatform>
     </CudaCompile>
-    <ClInclude Include="cudaloading.cuh">
+    <ClInclude Include="CudaAccelerator.cuh">
       <FileType>Document</FileType>
     </ClInclude>
   </ItemGroup>
