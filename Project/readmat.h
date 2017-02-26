@@ -4,7 +4,7 @@
 #include "matrix.h"
 #include "mex.h"
 #include "program_exception.h"
-
+#include "stdint.h"
 
 class readmat
 {
@@ -28,7 +28,7 @@ public:
 	//	get number of dimensions
 	int getnumbrofdimensions() const;
 	// get pointer to array
-	double*  getarraypointer() const;
+	uint8_t*  getarraypointer() const;
 	// get pointer to each dimension size
 	const size_t* dimensionpointer() const;
 	//number of elements

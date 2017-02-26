@@ -60,9 +60,10 @@ int readmat::getnumbrofdimensions() const
 	return mxGetNumberOfDimensions(painfo);
 }
 
-double * readmat::getarraypointer() const
+uint8_t* readmat::getarraypointer() const
 {
-		return mxGetPr(pa);
+	//return mxGetPr(pa);
+	return ((uint8_t*)mxGetData(pa));
 }
 
 const size_t*  readmat::dimensionpointer() const
