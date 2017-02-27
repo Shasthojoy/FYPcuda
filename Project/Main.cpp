@@ -41,7 +41,7 @@ int main()
 	int elements;
 	int numberofdimension;
 
-	const char *file = "lfhalf.mat";
+	const char *file = "BraceleU.mat";
 	const size_t* dimepointer;
 	Mat out;
 
@@ -76,12 +76,13 @@ int main()
 	int align = 64;
 	uint8_t*  __restrict ReOrderedImage = (uint8_t*)_mm_malloc(size, align);
 	uint8_t*  __restrict IntegerShiftedImage = (uint8_t*)_mm_malloc(size, align);
+	float* __restrict FinalImage = new float[data.U*data.V];
 	start = omp_get_wtime();
 	omp_set_dynamic(0);
-	omp_set_num_threads(8);
+	omp_set_num_threads(4);
 	int X_shift, Y_shift;
 	int m;
-	m = 1;
+	m = 0;
 #pragma omp parallel
 	{
 		int id = omp_get_thread_num();
@@ -101,37 +102,43 @@ int main()
 		}
 	}
 	start1 = omp_get_wtime();
-	if (m != 0)
+	//if (m != 0)
 	{
-		int RowStartSrc, RowShiftSrc, ImageStart, ImageShift, RowStartDst, RowShiftDst;
-
-		for (int x = 0; x < data.X; x++)
+#pragma omp parallel
 		{
-			X_shift = x*m;
-			for (int y = 0; y < data.Y; ++y)
+			int X_shift, Y_shift;
+			int id = omp_get_thread_num();
+			int num_threads = omp_get_num_threads();
+			int RowStartSrc, RowShiftSrc, ImageStart, ImageShift, RowStartDst, RowShiftDst;
+
+			for (int x = id; x < data.X; x+=num_threads)
 			{
-				Y_shift = y*m;
-				ImageStart = (data.V*data.U*x) + (data.V*data.U*data.X*y);
-				for (int u = 0; u < data.U; ++u)
+				X_shift = x*m;
+				for (int y = 0; y < data.Y; ++y)
 				{
-
-					RowStartDst = (data.V*u) + (data.V*data.U*x) + (data.V*data.U*data.X*y);
-					RowShiftDst = RowStartDst + data.V - Y_shift;
-					if (u >= X_shift)
+					Y_shift = y*m;
+					ImageStart = (data.V*data.U*x) + (data.V*data.U*data.X*y);
+					for (int u = 0; u < data.U; ++u)
 					{
-						RowStartSrc = (data.V*(u - X_shift)) + (data.V*data.U*x) + (data.V*data.U*data.X*y);
-					}
-					else
-					{
-						RowStartSrc = (data.V*(data.U - (X_shift - u))) + (data.V*data.U*x) + (data.V*data.U*data.X*y);
-					}
-					RowShiftSrc = RowStartSrc + data.V - Y_shift;
 
-					memcpy(IntegerShiftedImage + RowStartDst, ReOrderedImage + RowShiftSrc, sizeof(uint8_t)*Y_shift);
+						RowStartDst = (data.V*u) + (data.V*data.U*x) + (data.V*data.U*data.X*y);
+						RowShiftDst = RowStartDst + data.V - Y_shift;
+						if (u >= X_shift)
+						{
+							RowStartSrc = (data.V*(u - X_shift)) + (data.V*data.U*x) + (data.V*data.U*data.X*y);
+						}
+						else
+						{
+							RowStartSrc = (data.V*(data.U - (X_shift - u))) + (data.V*data.U*x) + (data.V*data.U*data.X*y);
+						}
+						RowShiftSrc = RowStartSrc + data.V - Y_shift;
 
-					memcpy(IntegerShiftedImage + RowStartDst + Y_shift, ReOrderedImage + RowStartSrc, sizeof(uint8_t)*(data.V - Y_shift));
+						memcpy(IntegerShiftedImage + RowStartDst, ReOrderedImage + RowShiftSrc, sizeof(uint8_t)*Y_shift);
+
+						memcpy(IntegerShiftedImage + RowStartDst + Y_shift, ReOrderedImage + RowStartSrc, sizeof(uint8_t)*(data.V - Y_shift));
+					}
+
 				}
-
 			}
 		}
 	}
@@ -139,21 +146,31 @@ int main()
 
 	end = omp_get_wtime();
 	int h;
+	float Temp;
 	for (int u = 0; u < data.U; u++)
 	{
 		for (int v = 0; v < data.V; v++)
 		{
+			Temp = 0;
 			for (int y = 0; y < data.Y; y++)
 			{
 				for (int x = 0; x < data.X; x++)
 				{
-					*(ReOrderedImage + v + (data.V*u) + (data.V*data.U*x) + (data.V*data.U*data.X*y)) = getelement(data, x, v, u, y, dataelements);
+					Temp = Temp + (float)*(IntegerShiftedImage + v + (data.V*u) + (data.V*data.U*x) + (data.V*data.U*data.X*y));
 				}
 			}
+			*(FinalImage + v + (data.V*u)) = Temp/(255*(data.X*data.Y));
 		}
 	}
-	}
+	
+	out = Mat(data.U, data.V, CV_32FC1, FinalImage); //create an image
+	namedWindow("Refocused Image", CV_WINDOW_AUTOSIZE);
+	//resizeWindow("Refocused Image", 600, 600);
+	imshow("Refocused Image", out); //display the image which is stored in the 'img' in the "MyWindow" window
 
+	waitKey(0);  //wait infinite time for a keyress
+
+	destroyWindow("Refocused Image"); //destroy the window with the name, "MyWindow"*/
 	cout << "The end of array \n FINISHED\n";
 	for (int k = 0; k < 100; k++)
 	{
