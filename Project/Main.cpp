@@ -11,6 +11,7 @@
 #include "opencv2/highgui/highgui.hpp"
 #include <ctime>
 #include "omp.h"
+
 using namespace std;
 using namespace cv;
 
@@ -19,7 +20,7 @@ typedef struct {
 	size_t Y;
 	size_t U;
 	size_t V;
-	
+
 
 } DataIn;
 
@@ -34,231 +35,156 @@ int main()
 {
 	const clock_t begin_time = clock();
 	int i;
-	double start, end,start1;
-		
+	double start, end, start1;
+
 	start1 = omp_get_wtime();
 	int elements;
 	int numberofdimension;
-	
+
 	const char *file = "lfhalf.mat";
 	const size_t* dimepointer;
 	Mat out;
-	
-	try{
-		readmat thismat(file);
-		numberofdimension = thismat.getnumbrofdimensions();
-		dimepointer = thismat.dimensionpointer();
+
+
+	readmat thismat(file);
+	numberofdimension = thismat.getnumbrofdimensions();
+	dimepointer = thismat.dimensionpointer();
 
 
 
-		cout << "The dimensions are  ";
-		for (int k = 0; k < numberofdimension; k++)
-		{
-			cout << *(dimepointer + k);
-			cout << "  ";
-		}
-		elements = thismat.numberofelements();
-
-		// Dimensions
-		static DataIn data;
-		data.X = *(dimepointer);
-		data.Y = *(dimepointer + 1);
-		data.U = *(dimepointer + 2);
-		data.V = *(dimepointer + 3);
-
-		uint8_t* dataelements;
-		dataelements = thismat.getarraypointer();
-		for (int k = 0; k < numberofdimension; k++)
-		{
-
-			cout << unsigned(*(dataelements + k));
-			cout << "  ";
-		}
-		float*  __restrict image = new float[data.U*data.V];
-		int m = -6;
-
-
-		//omp_set_dynamic(0);
-		omp_set_num_threads(2);
-		start = omp_get_wtime();
-		if (m >= 0)
-		{
-
-#pragma omp parallel
-			{
-
-				float temp_sum;
-				int X_shift, Y_shift;
-				int id = omp_get_thread_num();
-				int num_threads = omp_get_num_threads();
-				std::cout << "thread is " << id << endl;
-
-				for (int v = 0; v < data.V; v += num_threads)
-				{
-					for (int u = 0; u < data.U; u++)
-					{
-						temp_sum = 0;
-
-						for (int y = 0; y < data.Y; y++)
-						{
-							Y_shift = y*m;
-
-							for (int x = 0; x < data.X; x++)
-							{
-
-								X_shift = x*m;
-								if ((v + id) < Y_shift && u < X_shift){
-									temp_sum += getelement(data, x, (data.V - (Y_shift - (v + id))), (data.U - (X_shift - u)), y, dataelements);
-
-
-								}
-
-
-								else if ((v + id) >= Y_shift && u < X_shift){
-									temp_sum += getelement(data, x, ((v + id) - (Y_shift)), (data.U - (X_shift - u)), y, dataelements);
-
-								}
-
-								else if ((v + id) < Y_shift &&  u >= X_shift){
-									temp_sum += getelement(data, x, (data.V - (Y_shift - (v + id))), (u - (X_shift)), y, dataelements);
-
-								}
-
-								else if ((v + id) >= Y_shift && u >= X_shift){
-									temp_sum += getelement(data, x, ((v + id) - (Y_shift)), (u - (X_shift)), y, dataelements);
-
-								}
-
-
-							}
-
-						}
-						//#pragma omp critical
-						{
-							*(image + (u*data.V) + (v + id)) = temp_sum / (data.X*data.Y * 255);
-						}
-
-					}
-				}
-			}
-		}
-		else
-		{
-			m = -m;
-#pragma omp parallel
-			{
-				float temp_sum;
-				int X_shift, Y_shift;
-				int id = omp_get_thread_num();
-				int num_threads = omp_get_num_threads();
-				std::cout << "thread is " << id << endl;
-
-				for (int v = 0; v < data.V; v += num_threads)
-				{
-					for (int u = 0; u < data.U; u++)
-					{
-						temp_sum = 0;
-
-						for (int y = 0; y < data.Y; y++)
-						{
-							Y_shift = y*m;
-
-							for (int x = 0; x < data.X; x++)
-							{
-
-								X_shift = x*m;
-								//if ((v + id) < Y_shift && u < X_shift){
-								//temp_sum += getelement(data, x, (data.V - (Y_shift - (v + id))), (data.U - (X_shift - u)), y, dataelements);
-								if ((v + id) >= data.V - Y_shift && u >= data.U - X_shift){
-									temp_sum += getelement(data, x, ((Y_shift + (v + id)) - data.V), ((X_shift + u) - data.U), y, dataelements);
-
-
-
-								}
-
-
-								//else if ((v + id) >= Y_shift && u < X_shift){
-								//temp_sum += getelement(data, x, ((v + id) - (Y_shift)), (data.U - (X_shift - u)), y, dataelements);
-
-								if ((v + id) >= data.V - Y_shift && u < data.U - X_shift){
-									temp_sum += getelement(data, x, ((Y_shift + (v + id)) - data.V), X_shift + u, y, dataelements);
-
-								}
-
-								//else if ((v + id) < Y_shift &&  u >= X_shift){
-								//temp_sum += getelement(data, x, (data.V - (Y_shift - (v + id))), (u - (X_shift)), y, dataelements);
-								if ((v + id) < data.V - Y_shift && u >= data.U - X_shift){
-									temp_sum += getelement(data, x, (Y_shift + (v + id)), ((X_shift + u) - data.U), y, dataelements);
-
-								}
-
-								//else if ((v + id) >= Y_shift && u >= X_shift){
-								//temp_sum += getelement(data, x, ((v + id) - (Y_shift)), (u - (X_shift)), y, dataelements);
-								if ((v + id) < data.V - Y_shift && u < data.U - X_shift){
-									temp_sum += getelement(data, x, (Y_shift + (v + id)), X_shift + u, y, dataelements);
-
-								}
-
-
-							}
-
-						}
-						//#pragma omp critical
-						{
-							*(image + (u*data.V) + (v + id)) = temp_sum / (data.X*data.Y * 255);
-						}
-
-					}
-				}
-			}
-		}
-		
-		cout << "The end of array \n FINISHED\n";
-
-
-		end = omp_get_wtime();
-		std::cout << "\n The wall time algo: " << (end - start)<<endl;
-		std::cout << "\n The wall time: " << (end - start1) << endl;
-		out = Mat(data.U, data.V, CV_32FC1, image); //create an image
-		
-		if (out.empty()) //check whether the image is loaded or not
-		{
-			cout << "Error : Image cannot be loaded..!!" << endl;
-			return -1;
-		}
-		std::cout << float(clock() - begin_time) / CLOCKS_PER_SEC;
-
-
-
-		namedWindow("Refocused Image", WINDOW_NORMAL);
-		resizeWindow("Refocused Image", 600, 600);
-		imshow("Refocused Image", out); //display the image which is stored in the 'img' in the "MyWindow" window
-
-		waitKey(0);  //wait infinite time for a keyress
-
-		destroyWindow("Refocused Image"); //destroy the window with the name, "MyWindow"*/
-
-
-
-
-		cout << endl;
-		cout << "This is the number of dimensions  ";
-		cout << numberofdimension << endl;
-
-		cout << "The array elements ";
-		cout << elements;
-		cout << endl;
-
-		for (int n = 0; n < elements; n++)
-		{
-			//cout << *(arraypint + n);
-			//cout << " ";
-		}
-	}
-	catch (exception& e)
+	cout << "The dimensions are  ";
+	for (int k = 0; k < numberofdimension; k++)
 	{
-		cout << "ERROR:"<< e.what() << endl;
+		cout << *(dimepointer + k);
+		cout << "  ";
 	}
+	elements = thismat.numberofelements();
+
+	// Dimensions
+	DataIn data;
+	data.X = *(dimepointer);
+	data.Y = *(dimepointer + 1);
+	data.U = *(dimepointer + 2);
+	data.V = *(dimepointer + 3);
+
+	uint8_t* dataelements;
+	dataelements = thismat.getarraypointer();
+	cout << "The dimensions are  \n";
+
+	int size;
+	size = data.X*data.Y*data.U*data.V;
+	int align = 64;
+	uint8_t*  __restrict ReOrderedImage = (uint8_t*)_mm_malloc(size, align);
+	uint8_t*  __restrict IntegerShiftedImage = (uint8_t*)_mm_malloc(size, align);
+	start = omp_get_wtime();
+	omp_set_dynamic(0);
+	omp_set_num_threads(8);
+	int X_shift, Y_shift;
+	int m;
+	m = 1;
+#pragma omp parallel
+	{
+		int id = omp_get_thread_num();
+		int num_threads = omp_get_num_threads();
+		for (int u = id; u < data.U; u += num_threads)
+		{
+			for (int v = 0; v < data.V; v++)
+			{
+				for (int y = 0; y < data.Y; y++)
+				{
+					for (int x = 0; x < data.X; x++)
+					{
+						*(ReOrderedImage + v + (data.V*u) + (data.V*data.U*x) + (data.V*data.U*data.X*y)) = getelement(data, x, v, u, y, dataelements);
+					}
+				}
+			}
+		}
+	}
+	start1 = omp_get_wtime();
+	if (m != 0)
+	{
+		int RowStartSrc, RowShiftSrc, ImageStart, ImageShift, RowStartDst, RowShiftDst;
+
+		for (int x = 0; x < data.X; x++)
+		{
+			X_shift = x*m;
+			for (int y = 0; y < data.Y; ++y)
+			{
+				Y_shift = y*m;
+				ImageStart = (data.V*data.U*x) + (data.V*data.U*data.X*y);
+				for (int u = 0; u < data.U; ++u)
+				{
+
+					RowStartDst = (data.V*u) + (data.V*data.U*x) + (data.V*data.U*data.X*y);
+					RowShiftDst = RowStartDst + data.V - Y_shift;
+					if (u >= X_shift)
+					{
+						RowStartSrc = (data.V*(u - X_shift)) + (data.V*data.U*x) + (data.V*data.U*data.X*y);
+					}
+					else
+					{
+						RowStartSrc = (data.V*(data.U - (X_shift - u))) + (data.V*data.U*x) + (data.V*data.U*data.X*y);
+					}
+					RowShiftSrc = RowStartSrc + data.V - Y_shift;
+
+					memcpy(IntegerShiftedImage + RowStartDst, ReOrderedImage + RowShiftSrc, sizeof(uint8_t)*Y_shift);
+
+					memcpy(IntegerShiftedImage + RowStartDst + Y_shift, ReOrderedImage + RowStartSrc, sizeof(uint8_t)*(data.V - Y_shift));
+				}
+
+			}
+		}
+	}
+
+
+	end = omp_get_wtime();
+	int h;
+	for (int u = 0; u < data.U; u++)
+	{
+		for (int v = 0; v < data.V; v++)
+		{
+			for (int y = 0; y < data.Y; y++)
+			{
+				for (int x = 0; x < data.X; x++)
+				{
+					*(ReOrderedImage + v + (data.V*u) + (data.V*data.U*x) + (data.V*data.U*data.X*y)) = getelement(data, x, v, u, y, dataelements);
+				}
+			}
+		}
+	}
+	}
+
+	cout << "The end of array \n FINISHED\n";
+	for (int k = 0; k < 100; k++)
+	{
+		cout << unsigned(*(IntegerShiftedImage + k + (data.V*data.U * 0) + (data.V*data.U*data.X * 1)));
+		cout << " ";
+	}
+
+
+	cout << "\nSource data\n";
+	for (int k = 0; k < 100; k++)
+	{
+		cout << unsigned(*(ReOrderedImage + k + (data.V*data.U * 0) + (data.V*data.U*data.X * 1)));
+		cout << " ";
+	}
+	for (int k = 0; k < 5; k++)
+
+
+
+
+
+
+
+		cout << endl;
+	cout << "\nThis is the number of dimensions  ";
+	cout << numberofdimension << endl;
+
+	cout << "Data preparation time " << (end - start);
+	cout << "\nInteger shift time " << (end - start1);
+	cin >> h;
+
+
 
 
 	//cin >> i;
