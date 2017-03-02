@@ -251,21 +251,29 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, int* FilterSize, float *ou
 				PointerFilterCoefficient = k + 1;
 				for (int l = 0; l < ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) + 1; l++)
 				{
-					LoadPtr = ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) - l;
-					filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + 1));
-					InputDataLeft = _mm256_loadu_ps((in + offset - LoadPtr));
-					
-					if (l == ((*(FilterSize + PointerFilterCoefficient) - 1) / 2))
+					if ((v >= (*(FilterSize + PointerFilterCoefficient) - 1) / 2) && (v <= ((Data.V - 1) - (*(FilterSize + PointerFilterCoefficient) - 1) / 2)))
 					{
-						Accumilation[k] = _mm256_mul_ps(InputDataLeft, filterCoef);
+						LoadPtr = ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) - l;
+						filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + 1));
+						InputDataLeft = _mm256_loadu_ps((in + offset - LoadPtr));
+
+						if (l == ((*(FilterSize + PointerFilterCoefficient) - 1) / 2))
+						{
+							Accumilation[k] = _mm256_mul_ps(InputDataLeft, filterCoef);
+						}
+						else
+						{
+							InputDataRight = _mm256_loadu_ps((in + offset + LoadPtr));
+							SymmetricAdd = _mm256_add_ps(InputDataLeft, InputDataRight);
+							Accumilation[k] = _mm256_mul_ps(SymmetricAdd, filterCoef);
+
+						}
 					}
 					else
 					{
-						InputDataRight = _mm256_loadu_ps((in + offset + LoadPtr));
-						SymmetricAdd = _mm256_add_ps(InputDataLeft, InputDataRight);
-						Accumilation[k] = _mm256_mul_ps(SymmetricAdd, filterCoef);
 
 					}
+					
 					
 				}
 
