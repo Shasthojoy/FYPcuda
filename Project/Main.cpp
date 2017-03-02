@@ -11,7 +11,8 @@
 #include "opencv2/highgui/highgui.hpp"
 #include <ctime>
 #include "omp.h"
-
+#include <errno.h>  
+#include <immintrin.h>
 using namespace std;
 using namespace cv;
 
@@ -20,14 +21,15 @@ typedef struct {
 	size_t Y;
 	size_t U;
 	size_t V;
-
-
+	size_t KernalNoOfFilters;
+	size_t KernalFilterLength;
+	
 } DataIn;
 
-inline float getelement(DataIn data, int x, int v, int u, int y, uint8_t * __restrict dataElements)
+inline uint8_t getelement(DataIn data, int x, int v, int u, int y, uint8_t * __restrict dataElements)
 {
 	int index = data.X*data.Y*data.U*(v)+data.X*data.Y*(u)+data.X*(y)+x;
-	return (float)dataElements[index];
+	return dataElements[index];
 }
 
 
@@ -36,53 +38,73 @@ int main()
 	const clock_t begin_time = clock();
 	int i;
 	double start, end, start1;
-
+	errno_t err;
 	start1 = omp_get_wtime();
 	int elements;
 	int numberofdimension;
 
-	const char *file = "BraceleU.mat";
+	const char *fileImage = "BraceleU.mat";
 	const size_t* dimepointer;
 	Mat out;
+	const char *Filter = "filter.mat";
+
+	readmat* thismat = new readmat(fileImage);
+	readmat filter(Filter);
 
 
-	readmat thismat(file);
-	numberofdimension = thismat.getnumbrofdimensions();
-	dimepointer = thismat.dimensionpointer();
 
-
-
-	cout << "The dimensions are  ";
-	for (int k = 0; k < numberofdimension; k++)
+	numberofdimension = filter.getnumbrofdimensions();
+	dimepointer = thismat->dimensionpointer();
+	const size_t * FilterDimensions;
+	FilterDimensions = filter.dimensionpointer();
+	float* FilterCoefficients = (float*)filter.getarraypointer();
+	size_t FilterSizes[7] = { 1, 49, 11, 31, 17, 19, 7 };
+	cout << "The filters are  ";
+	for (int k = 0; k < 7; k++)
 	{
-		cout << *(dimepointer + k);
+		cout << *(FilterCoefficients + k + 49);
 		cout << "  ";
 	}
-	elements = thismat.numberofelements();
+	elements = thismat->numberofelements();
 
 	// Dimensions
 	DataIn data;
+	data.KernalFilterLength = *(FilterDimensions);
+	data.KernalNoOfFilters = *(FilterDimensions + 1);
 	data.X = *(dimepointer);
 	data.Y = *(dimepointer + 1);
 	data.U = *(dimepointer + 2);
 	data.V = *(dimepointer + 3);
-
+	int size;
+	size = (data.X*data.Y*data.U*data.V * 4);
+	int align = 32;
+	//float*  __restrict IntegerShiftedImage = (float*)malloc(size);;
+	_set_errno(0);
+	float*  __restrict IntegerShiftedImage = (float*)_aligned_malloc(size, align);
+	if (IntegerShiftedImage == NULL)
+	{
+		_get_errno(&err);
+		cout << "\nThe aligned memory allocation failed\n" << err;
+	}
 	uint8_t* dataelements;
-	dataelements = thismat.getarraypointer();
+	dataelements = (uint8_t*)thismat->getarraypointer();
 	cout << "The dimensions are  \n";
 
-	int size;
-	size = data.X*data.Y*data.U*data.V;
-	int align = 64;
-	uint8_t*  __restrict ReOrderedImage = (uint8_t*)_mm_malloc(size, align);
-	uint8_t*  __restrict IntegerShiftedImage = (uint8_t*)_mm_malloc(size, align);
+
+
+
+	float*  __restrict ReOrderedImage = new float[data.X*data.Y*data.U*data.V];
+	//float*  __restrict IntegerShiftedImage = (float*)_mm_malloc(size, align);
+	//float*  __restrict IntegerShiftedImage = new float[data.X*data.Y*data.U*data.V];
+	//delete thismat;
+
 	float* __restrict FinalImage = new float[data.U*data.V];
 	start = omp_get_wtime();
 	omp_set_dynamic(0);
 	omp_set_num_threads(4);
 	int X_shift, Y_shift;
 	int m;
-	m = 0;
+	m = 1;
 #pragma omp parallel
 	{
 		int id = omp_get_thread_num();
@@ -101,6 +123,9 @@ int main()
 			}
 		}
 	}
+	int k = 0;
+	delete thismat;
+
 	start1 = omp_get_wtime();
 	//if (m != 0)
 	{
@@ -111,7 +136,7 @@ int main()
 			int num_threads = omp_get_num_threads();
 			int RowStartSrc, RowShiftSrc, ImageStart, ImageShift, RowStartDst, RowShiftDst;
 
-			for (int x = id; x < data.X; x+=num_threads)
+			for (int x = id; x < data.X; x += num_threads)
 			{
 				X_shift = x*m;
 				for (int y = 0; y < data.Y; ++y)
@@ -133,9 +158,9 @@ int main()
 						}
 						RowShiftSrc = RowStartSrc + data.V - Y_shift;
 
-						memcpy(IntegerShiftedImage + RowStartDst, ReOrderedImage + RowShiftSrc, sizeof(uint8_t)*Y_shift);
+						memcpy(IntegerShiftedImage + RowStartDst, ReOrderedImage + RowShiftSrc, sizeof(float)*Y_shift);
 
-						memcpy(IntegerShiftedImage + RowStartDst + Y_shift, ReOrderedImage + RowStartSrc, sizeof(uint8_t)*(data.V - Y_shift));
+						memcpy(IntegerShiftedImage + RowStartDst + Y_shift, ReOrderedImage + RowStartSrc, sizeof(float)*(data.V - Y_shift));
 					}
 
 				}
@@ -159,10 +184,10 @@ int main()
 					Temp = Temp + (float)*(IntegerShiftedImage + v + (data.V*u) + (data.V*data.U*x) + (data.V*data.U*data.X*y));
 				}
 			}
-			*(FinalImage + v + (data.V*u)) = Temp/(255*(data.X*data.Y));
+			*(FinalImage + v + (data.V*u)) = Temp / (255 * (data.X*data.Y));
 		}
 	}
-	
+
 	out = Mat(data.U, data.V, CV_32FC1, FinalImage); //create an image
 	namedWindow("Refocused Image", CV_WINDOW_AUTOSIZE);
 	//resizeWindow("Refocused Image", 600, 600);
@@ -209,3 +234,46 @@ int main()
 
 }
 
+void ConvolutionAVX(DataIn Data, float* FilterKernal, int* FilterSize, float *out, float *in,int Delay)
+{
+	__m256 filterCoef;
+	__m256 Accumilation[6], InputDataLeft, InputDataRight,SymmetricAdd;
+	int PointerFilterCoefficient;
+	int offset, LoadPtr, RightPtr;
+	for (int u = 0; u < Data.U; u++)
+	{
+		for (int v = 0; v < Data.V; v++)
+		{
+			offset = Data.V*u + v;
+			for (int k = 0; k < Data.KernalNoOfFilters - 1; k++)
+			{
+				Accumilation[k] = _mm256_setzero_ps();
+				PointerFilterCoefficient = k + 1;
+				for (int l = 0; l < ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) + 1; l++)
+				{
+					LoadPtr = ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) - l;
+					filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + 1));
+					InputDataLeft = _mm256_loadu_ps((in + offset - LoadPtr));
+					
+					if (l == ((*(FilterSize + PointerFilterCoefficient) - 1) / 2))
+					{
+						Accumilation[k] = _mm256_mul_ps(InputDataLeft, filterCoef);
+					}
+					else
+					{
+						InputDataRight = _mm256_loadu_ps((in + offset + LoadPtr));
+						SymmetricAdd = _mm256_add_ps(InputDataLeft, InputDataRight);
+						Accumilation[k] = _mm256_mul_ps(SymmetricAdd, filterCoef);
+
+					}
+					
+				}
+
+					
+			}
+
+		}
+	}
+
+
+}

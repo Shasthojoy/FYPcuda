@@ -28,12 +28,12 @@ public:
 	//	get number of dimensions
 	int getnumbrofdimensions() const;
 	// get pointer to array
-	uint8_t*  getarraypointer() const;
+	void*  getarraypointer() const;
 	// get pointer to each dimension size
 	const size_t* dimensionpointer() const;
 	//number of elements
 	int numberofelements() const;
-	
+	~readmat();
 
 };
 
