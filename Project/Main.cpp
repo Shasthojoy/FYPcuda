@@ -23,7 +23,7 @@ typedef struct {
 	size_t V;
 	size_t KernalNoOfFilters;
 	size_t KernalFilterLength;
-	
+
 } DataIn;
 
 inline uint8_t getelement(DataIn data, int x, int v, int u, int y, uint8_t * __restrict dataElements)
@@ -234,14 +234,31 @@ int main()
 
 }
 
-void ConvolutionAVX(DataIn Data, float* FilterKernal, int* FilterSize, float *out, float *in,int Delay)
+void ConvolutionAVX(DataIn Data, float* FilterKernal, int* FilterSize, float *out, float *in, int Delay)
 {
 	__m256 filterCoef;
-	__m256 Accumilation[6], InputDataLeft, InputDataRight,SymmetricAdd;
+	__m256 Accumilation[6], InputDataLeft, InputDataRight, SymmetricAdd;
+	__m256 ShiftEdge, ShiftEdgeReverse;
 	int PointerFilterCoefficient;
 	int offset, LoadPtr, RightPtr;
+	float *EdgeRight, *EdgeLeft;
+	EdgeLeft = new float[16];
+	EdgeRight = new float[16];
+	int LoadTemp;
 	for (int u = 0; u < Data.U; u++)
 	{
+		//To manage the edges
+		ShiftEdge = _mm256_loadu_ps(in + (Data.V*u));
+		ShiftEdgeReverse = _mm256_permute_ps(ShiftEdge, 26);
+		ShiftEdgeReverse = _mm256_permute2f128_ps(ShiftEdgeReverse, ShiftEdgeReverse, 1);
+		_mm256_storeu_ps(EdgeLeft, ShiftEdgeReverse);
+		_mm256_storeu_ps(EdgeLeft + 8, ShiftEdge);
+		ShiftEdge = _mm256_loadu_ps(in + (Data.V*(u + 1)) - 8);
+		ShiftEdgeReverse = _mm256_permute_ps(ShiftEdge, 26);
+		ShiftEdgeReverse = _mm256_permute2f128_ps(ShiftEdgeReverse, ShiftEdgeReverse, 1);
+		_mm256_storeu_ps(EdgeRight, ShiftEdge);
+		_mm256_storeu_ps(EdgeRight + 8, ShiftEdgeReverse);
+		
 		for (int v = 0; v < Data.V; v++)
 		{
 			offset = Data.V*u + v;
@@ -251,33 +268,65 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, int* FilterSize, float *ou
 				PointerFilterCoefficient = k + 1;
 				for (int l = 0; l < ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) + 1; l++)
 				{
-					if ((v >= (*(FilterSize + PointerFilterCoefficient) - 1) / 2) && (v <= ((Data.V - 1) - (*(FilterSize + PointerFilterCoefficient) - 1) / 2)))
+					//if ((v >= (*(FilterSize + PointerFilterCoefficient) - 1) / 2) && (v <= ((Data.V - 1) - (*(FilterSize + PointerFilterCoefficient) - 1) / 2)))
+
+
+					LoadPtr = ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) - l;
+					filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + 1));
+					if ((v >= LoadPtr))// && )
 					{
-						LoadPtr = ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) - l;
-						filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + 1));
 						InputDataLeft = _mm256_loadu_ps((in + offset - LoadPtr));
-
-						if (l == ((*(FilterSize + PointerFilterCoefficient) - 1) / 2))
-						{
-							Accumilation[k] = _mm256_mul_ps(InputDataLeft, filterCoef);
-						}
-						else
-						{
-							InputDataRight = _mm256_loadu_ps((in + offset + LoadPtr));
-							SymmetricAdd = _mm256_add_ps(InputDataLeft, InputDataRight);
-							Accumilation[k] = _mm256_mul_ps(SymmetricAdd, filterCoef);
-
-						}
 					}
 					else
 					{
+						LoadTemp = LoadPtr - v;
+						if (LoadTemp <= 7)
+							InputDataLeft = _mm256_loadu_ps(EdgeLeft + 8 - LoadTemp);
+						else
+						{
+							LoadTemp = LoadTemp - 8;
+							InputDataLeft = _mm256_loadu_ps((in + (Data.V*u))+LoadTemp);
+							InputDataLeft = _mm256_permute_ps(InputDataLeft, 26);
+							InputDataLeft = _mm256_permute2f128_ps(InputDataLeft, InputDataLeft, 1);
+
+						}
 
 					}
 					
-					
+					if (l == ((*(FilterSize + PointerFilterCoefficient) - 1) / 2))
+					{
+						Accumilation[k] = _mm256_mul_ps(InputDataLeft, filterCoef);
+					}
+					else
+					{
+						if (((v + 7) <= ((Data.V - 1) - LoadPtr)))
+						{
+							InputDataRight = _mm256_loadu_ps((in + offset + LoadPtr));
+						}
+						else
+						{
+							LoadTemp = v - (Data.V - 1) + LoadPtr;
+							if (LoadTemp <= 0)
+							{
+								InputDataRight = _mm256_loadu_ps(EdgeRight + 7 + LoadTemp);
+							}
+							else
+							{
+								InputDataRight = _mm256_loadu_ps(in + (Data.V*(u + 1) - 8) + (LoadTemp - 1));
+								InputDataRight = _mm256_permute_ps(InputDataRight, 26);
+								InputDataRight = _mm256_permute2f128_ps(InputDataRight, InputDataRight, 1);
+							}
+						}
+						SymmetricAdd = _mm256_add_ps(InputDataLeft, InputDataRight);
+						Accumilation[k] = _mm256_mul_ps(SymmetricAdd, filterCoef);
+
+					}
+
+
 				}
 
-					
+
+
 			}
 
 		}
