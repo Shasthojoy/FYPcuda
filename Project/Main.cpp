@@ -31,7 +31,7 @@ inline uint8_t getelement(DataIn data, int x, int v, int u, int y, uint8_t * __r
 	int index = data.X*data.Y*data.U*(v)+data.X*data.Y*(u)+data.X*(y)+x;
 	return dataElements[index];
 }
-
+void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float Delay);
 
 int main()
 {
@@ -167,7 +167,14 @@ int main()
 			}
 		}
 	}
-
+	// Fractional Shift CPU
+	float* FractionalShifted = new float[data.U*data.V];
+	ConvolutionAVX(data, FilterCoefficients, FilterSizes, FractionalShifted, IntegerShiftedImage, 0.4);
+	// void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float Delay)
+	for (int g = 0; g < 50; g++)
+	{
+		cout << *(FractionalShifted + g) << " ";
+	}
 
 	end = omp_get_wtime();
 	int h;
@@ -234,7 +241,7 @@ int main()
 
 }
 
-void ConvolutionAVX(DataIn Data, float* FilterKernal, int* FilterSize, float *out, float *in, float Delay)
+void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float Delay)
 {
 	__m256 filterCoef,DelayReg;
 	__m256 Accumilation[7], InputDataLeft, InputDataRight, SymmetricAdd;
@@ -260,7 +267,7 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, int* FilterSize, float *ou
 		_mm256_storeu_ps(EdgeRight, ShiftEdge);
 		_mm256_storeu_ps(EdgeRight + 8, ShiftEdgeReverse);
 		
-		for (int v = 0; v < Data.V; v++)
+		for (int v = 0; v < Data.V; v+=8)
 		{
 			offset = Data.V*u + v;
 			Accumilation[0] = _mm256_loadu_ps((in + offset));
