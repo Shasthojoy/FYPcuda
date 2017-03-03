@@ -104,7 +104,7 @@ int main()
 	omp_set_num_threads(4);
 	int X_shift, Y_shift;
 	int m;
-	m = 1;
+	m = 0;
 #pragma omp parallel
 	{
 		int id = omp_get_thread_num();
@@ -257,12 +257,12 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float 
 	{
 		//To manage the edges
 		ShiftEdge = _mm256_loadu_ps(in + (Data.V*u));
-		ShiftEdgeReverse = _mm256_permute_ps(ShiftEdge, 26);
+		ShiftEdgeReverse = _mm256_permute_ps(ShiftEdge, 27);
 		ShiftEdgeReverse = _mm256_permute2f128_ps(ShiftEdgeReverse, ShiftEdgeReverse, 1);
 		_mm256_storeu_ps(EdgeLeft, ShiftEdgeReverse);
 		_mm256_storeu_ps(EdgeLeft + 8, ShiftEdge);
 		ShiftEdge = _mm256_loadu_ps(in + (Data.V*(u + 1)) - 8);
-		ShiftEdgeReverse = _mm256_permute_ps(ShiftEdge, 26);
+		ShiftEdgeReverse = _mm256_permute_ps(ShiftEdge, 27);
 		ShiftEdgeReverse = _mm256_permute2f128_ps(ShiftEdgeReverse, ShiftEdgeReverse, 1);
 		_mm256_storeu_ps(EdgeRight, ShiftEdge);
 		_mm256_storeu_ps(EdgeRight + 8, ShiftEdgeReverse);
@@ -289,13 +289,14 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float 
 					else
 					{
 						LoadTemp = LoadPtr - v;
+						
 						if (LoadTemp <= 7)
 							InputDataLeft = _mm256_loadu_ps(EdgeLeft + 8 - LoadTemp);
 						else
 						{
-							LoadTemp = LoadTemp - 8;
-							InputDataLeft = _mm256_loadu_ps((in + (Data.V*u))+LoadTemp);
-							InputDataLeft = _mm256_permute_ps(InputDataLeft, 26);
+							LoadTemp = LoadTemp - 7;
+							InputDataLeft = _mm256_loadu_ps((in + (Data.V*u)) + LoadTemp-1);
+							InputDataLeft = _mm256_permute_ps(InputDataLeft, 27);
 							InputDataLeft = _mm256_permute2f128_ps(InputDataLeft, InputDataLeft, 1);
 
 						}
