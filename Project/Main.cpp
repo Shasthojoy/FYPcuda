@@ -234,10 +234,10 @@ int main()
 
 }
 
-void ConvolutionAVX(DataIn Data, float* FilterKernal, int* FilterSize, float *out, float *in, int Delay)
+void ConvolutionAVX(DataIn Data, float* FilterKernal, int* FilterSize, float *out, float *in, float Delay)
 {
-	__m256 filterCoef;
-	__m256 Accumilation[6], InputDataLeft, InputDataRight, SymmetricAdd;
+	__m256 filterCoef,DelayReg;
+	__m256 Accumilation[7], InputDataLeft, InputDataRight, SymmetricAdd;
 	__m256 ShiftEdge, ShiftEdgeReverse;
 	int PointerFilterCoefficient;
 	int offset, LoadPtr, RightPtr;
@@ -245,6 +245,7 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, int* FilterSize, float *ou
 	EdgeLeft = new float[16];
 	EdgeRight = new float[16];
 	int LoadTemp;
+	DelayReg = _mm256_broadcast_ss(&Delay);
 	for (int u = 0; u < Data.U; u++)
 	{
 		//To manage the edges
@@ -262,17 +263,18 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, int* FilterSize, float *ou
 		for (int v = 0; v < Data.V; v++)
 		{
 			offset = Data.V*u + v;
-			for (int k = 0; k < Data.KernalNoOfFilters - 1; k++)
+			Accumilation[0] = _mm256_loadu_ps((in + offset));
+			for (int k = 1; k < Data.KernalNoOfFilters; k++)
 			{
 				Accumilation[k] = _mm256_setzero_ps();
-				PointerFilterCoefficient = k + 1;
+				PointerFilterCoefficient = k;
 				for (int l = 0; l < ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) + 1; l++)
 				{
 					//if ((v >= (*(FilterSize + PointerFilterCoefficient) - 1) / 2) && (v <= ((Data.V - 1) - (*(FilterSize + PointerFilterCoefficient) - 1) / 2)))
 
 
 					LoadPtr = ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) - l;
-					filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + 1));
+					filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + l));
 					if ((v >= LoadPtr))// && )
 					{
 						InputDataLeft = _mm256_loadu_ps((in + offset - LoadPtr));
@@ -324,11 +326,11 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, int* FilterSize, float *ou
 
 
 				}
-
-
-
+				Accumilation[k] = _mm256_mul_ps(DelayReg, Accumilation[k]);
+				DelayReg = _mm256_mul_ps(DelayReg, DelayReg);
+				Accumilation[0] = _mm256_add_ps(Accumilation[k], Accumilation[0]);
 			}
-
+			_mm256_storeu_ps(out + offset, Accumilation[0]);
 		}
 	}
 
