@@ -58,7 +58,7 @@ int main()
 	const size_t * FilterDimensions;
 	FilterDimensions = filter.dimensionpointer();
 	float* FilterCoefficients = (float*)filter.getarraypointer();
-	size_t FilterSizes[7] = { 1, 49, 11, 31, 17, 19, 7 };
+	size_t FilterSizes[7] = { 1, 49, 23, 31, 17, 19, 7 };
 	cout << "The filters are  ";
 	for (int k = 0; k < 7; k++)
 	{
@@ -247,11 +247,8 @@ int main()
 
 void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float* Delay)
 {
-	cout << "\n The value is " << Data.V << endl;
-	cout << "\n The value is " << Data.KernalFilterLength << endl;
-	cout << "\n The value is " << Data.KernalNoOfFilters << endl;
-	cout << "\n The value is " << Data.U << endl;
-	__m256 filterCoef,DelayReg;
+	
+	__m256 filterCoef, DelayReg, DelayRegPower;
 	__m256 Accumilation[7], InputDataLeft, InputDataRight, SymmetricAdd;
 	__m256 ShiftEdge, ShiftEdgeReverse;
 	int PointerFilterCoefficient;
@@ -262,7 +259,7 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float 
 	int LoadTemp;
 	float FilterCoefCheck;
 	float FilterNoCheck;
-	
+	DelayReg = _mm256_broadcast_ss(Delay);
 	for (int u = 0; u < Data.U; u++)
 	{
 		//To manage the edges
@@ -281,7 +278,7 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float 
 		{
 			offset = Data.V*u + v;
 			Accumilation[0] = _mm256_loadu_ps((in + offset));
-			DelayReg = _mm256_broadcast_ss(Delay);
+			DelayRegPower = _mm256_broadcast_ss(Delay);
 			for (int k = 1; k < Data.KernalNoOfFilters; k++)
 			{
 				Accumilation[k] = _mm256_setzero_ps();
@@ -291,10 +288,10 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float 
 				{
 					//if ((v >= (*(FilterSize + PointerFilterCoefficient) - 1) / 2) && (v <= ((Data.V - 1) - (*(FilterSize + PointerFilterCoefficient) - 1) / 2)))
 
-
 					LoadPtr = ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) - l;
 					filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + l));
 					FilterCoefCheck = *(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + l));
+					
 					if ((v >= LoadPtr))// && )
 					{
 						InputDataLeft = _mm256_loadu_ps((in + offset - LoadPtr));
@@ -354,8 +351,8 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float 
 
 
 				}
-				Accumilation[k] = _mm256_mul_ps(DelayReg, Accumilation[k]);
-				DelayReg = _mm256_mul_ps(DelayReg, DelayReg);
+				Accumilation[k] = _mm256_mul_ps(DelayRegPower, Accumilation[k]);
+				DelayRegPower = _mm256_mul_ps(DelayRegPower, DelayReg);
 				Accumilation[0] = _mm256_add_ps(Accumilation[k], Accumilation[0]);
 			}
 			_mm256_storeu_ps(out + offset, Accumilation[0]);
