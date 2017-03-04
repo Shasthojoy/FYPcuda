@@ -31,7 +31,7 @@ inline uint8_t getelement(DataIn data, int x, int v, int u, int y, uint8_t * __r
 	int index = data.X*data.Y*data.U*(v)+data.X*data.Y*(u)+data.X*(y)+x;
 	return dataElements[index];
 }
-void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float Delay);
+void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float* Delay);
 
 int main()
 {
@@ -169,7 +169,11 @@ int main()
 	}
 	// Fractional Shift CPU
 	float* FractionalShifted = new float[data.U*data.V];
-	ConvolutionAVX(data, FilterCoefficients, FilterSizes, FractionalShifted, IntegerShiftedImage, 0.4);
+	float* Delay = new float[1];
+	*Delay = 0.4;
+	
+	
+	ConvolutionAVX(data, FilterCoefficients, FilterSizes, FractionalShifted, IntegerShiftedImage, Delay);
 	// void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float Delay)
 	for (int g = 0; g < 50; g++)
 	{
@@ -241,7 +245,7 @@ int main()
 
 }
 
-void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float Delay)
+void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float* Delay)
 {
 	cout << "\n The value is " << Data.V << endl;
 	cout << "\n The value is " << Data.KernalFilterLength << endl;
@@ -256,7 +260,9 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float 
 	EdgeLeft = new float[16];
 	EdgeRight = new float[16];
 	int LoadTemp;
-	DelayReg = _mm256_broadcast_ss(&Delay);
+	float FilterCoefCheck;
+	float FilterNoCheck;
+	
 	for (int u = 0; u < Data.U; u++)
 	{
 		//To manage the edges
@@ -275,10 +281,12 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float 
 		{
 			offset = Data.V*u + v;
 			Accumilation[0] = _mm256_loadu_ps((in + offset));
+			DelayReg = _mm256_broadcast_ss(Delay);
 			for (int k = 1; k < Data.KernalNoOfFilters; k++)
 			{
 				Accumilation[k] = _mm256_setzero_ps();
 				PointerFilterCoefficient = k;
+				FilterNoCheck = k % 2;
 				for (int l = 0; l < ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) + 1; l++)
 				{
 					//if ((v >= (*(FilterSize + PointerFilterCoefficient) - 1) / 2) && (v <= ((Data.V - 1) - (*(FilterSize + PointerFilterCoefficient) - 1) / 2)))
@@ -286,6 +294,7 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float 
 
 					LoadPtr = ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) - l;
 					filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + l));
+					FilterCoefCheck = *(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + l));
 					if ((v >= LoadPtr))// && )
 					{
 						InputDataLeft = _mm256_loadu_ps((in + offset - LoadPtr));
@@ -309,7 +318,7 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float 
 					
 					if (l == ((*(FilterSize + PointerFilterCoefficient) - 1) / 2))
 					{
-						Accumilation[k] = _mm256_mul_ps(InputDataLeft, filterCoef);
+						Accumilation[k] = _mm256_add_ps(_mm256_mul_ps(InputDataLeft, filterCoef), Accumilation[k]);
 					}
 					else
 					{
@@ -331,7 +340,14 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float 
 								InputDataRight = _mm256_permute2f128_ps(InputDataRight, InputDataRight, 1);
 							}
 						}
-						SymmetricAdd = _mm256_add_ps(InputDataLeft, InputDataRight);
+						if (FilterNoCheck == 1)
+						{
+								SymmetricAdd = _mm256_sub_ps(InputDataRight, InputDataLeft);
+						}
+						else
+						{
+							SymmetricAdd = _mm256_add_ps(InputDataRight, InputDataLeft);
+						}
 						Accumilation[k] = _mm256_add_ps(_mm256_mul_ps(SymmetricAdd, filterCoef), Accumilation[k]);
 
 					}
