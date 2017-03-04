@@ -88,7 +88,7 @@ int main()
 	}
 	uint8_t* dataelements;
 	dataelements = (uint8_t*)thismat->getarraypointer();
-	cout << "The dimensions are  \n";
+	cout << "The dimensions are  \n" << data.U << endl;
 
 
 
@@ -243,6 +243,10 @@ int main()
 
 void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float Delay)
 {
+	cout << "\n The value is " << Data.V << endl;
+	cout << "\n The value is " << Data.KernalFilterLength << endl;
+	cout << "\n The value is " << Data.KernalNoOfFilters << endl;
+	cout << "\n The value is " << Data.U << endl;
 	__m256 filterCoef,DelayReg;
 	__m256 Accumilation[7], InputDataLeft, InputDataRight, SymmetricAdd;
 	__m256 ShiftEdge, ShiftEdgeReverse;
@@ -322,13 +326,13 @@ void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float 
 							}
 							else
 							{
-								InputDataRight = _mm256_loadu_ps(in + (Data.V*(u + 1) - 8) + (LoadTemp - 1));
-								InputDataRight = _mm256_permute_ps(InputDataRight, 26);
+								InputDataRight = _mm256_loadu_ps(in + (Data.V*(u + 1) - 8) - (LoadTemp - 1));
+								InputDataRight = _mm256_permute_ps(InputDataRight, 27);
 								InputDataRight = _mm256_permute2f128_ps(InputDataRight, InputDataRight, 1);
 							}
 						}
 						SymmetricAdd = _mm256_add_ps(InputDataLeft, InputDataRight);
-						Accumilation[k] = _mm256_mul_ps(SymmetricAdd, filterCoef);
+						Accumilation[k] = _mm256_add_ps(_mm256_mul_ps(SymmetricAdd, filterCoef), Accumilation[k]);
 
 					}
 
