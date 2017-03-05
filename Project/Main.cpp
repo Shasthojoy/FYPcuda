@@ -44,7 +44,7 @@ int main()
 	int elements;
 	int numberofdimension;
 
-	const char *fileImage = "BraceleU.mat";
+	const char *fileImage = "lfhalf.mat";
 	const size_t* dimepointer;
 	Mat out;
 	const char *Filter = "filter.mat";
@@ -176,11 +176,18 @@ int main()
 	*Delay = 0.4;
 
 	start2 = omp_get_wtime();
-	//ConvolutionAVX(data, FilterCoefficients, FilterSizes, FractionalShifted, IntegerShiftedImage, Delay);
-	end2 = omp_get_wtime();
+	/*
+	for (int i = 0; i < 289; i++)
+	{
+          ConvolutionAVX(data, FilterCoefficients, FilterSizes, FractionalShifted, IntegerShiftedImage, Delay);
+	}
+	*/
+
 	// void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float Delay)
 	//(DataIn Data, float ShiftAmount, float* __restrict In, float* __restrict Out, int* FilterSize, float* __restrict FilterKernal)
+
 	ColumnConvilutionIntegerShiftAVX(data, 1.4, ReOrderedImage, FractionalShifted, FilterSizes, FilterCoefficients);
+	end2 = omp_get_wtime();
 	cout << "\n The data is good\n";
 	for (int g = 0; g < 50; g++)
 	{
@@ -387,121 +394,124 @@ inline float* PickRow(size_t u, size_t v, float* ImageStart, int IntegerShift, i
 }
 void ColumnConvilutionIntegerShiftAVX(DataIn Data, float ShiftAmount, float* __restrict In, float* __restrict Out, size_t* FilterSize, float* __restrict FilterKernal)
 {
-	
-	int ImageIntergerShift;
-	float ImageShiftAmount;
-	float* ImageDelay= new float[1];
-	float* LightFieldSizeInverse = new float[1];
-	*LightFieldSizeInverse = 1 / 17;
-	cout << "tttttt " << *LightFieldSizeInverse << endl;
-	float* ImageStart;
-	__m256 filterCoef, DelayReg, DelayRegPower;
-	__m256 Accumilation[7], InputDataLeft, InputDataRight, SymmetricAdd;
-	__m256 ColumnSumAccumilator,Divider;
-	Divider = _mm256_broadcast_ss(LightFieldSizeInverse);
-	int MaxFilterOrder = 25;
-	//Check if Filter is Odd or Even
-	int FilterNoCheck;
-	//size of each filter
-	int ThisFilterSize;
-	//Calculate Row for the Convolution
-	int LoadLeft;
-	int LoadRight;
-	int ConvolutionFilterIndex;
-	/*Here in this code y iterates through image columns and x iterates through image Rows.*/
-	
+	omp_set_num_threads(4);
+#pragma omp parallel
 	{
-		for (int y = 0; y < Data.Y; y++)
-		{
-			for (int v = 0; v < Data.V; v += 8)
-			{
-				for (int u = 0; u < Data.U; u++)
-				{
-					ColumnSumAccumilator = _mm256_setzero_ps();
-					for (int x = 0; x < Data.X; x++)
-					{
-						ImageShiftAmount = ShiftAmount*x;
-						ImageIntergerShift = round(ImageShiftAmount);
-						*ImageDelay = ImageShiftAmount - ImageIntergerShift;
-						ImageStart = In + (Data.V*Data.U*x) + (Data.V*Data.U*Data.X*y);
-						DelayReg = _mm256_broadcast_ss(ImageDelay);
-						DelayRegPower = _mm256_broadcast_ss(ImageDelay);
-						Accumilation[0] = _mm256_loadu_ps(PickRow(u, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
-						if (*ImageDelay != 0)
-						{
-							for (int l = 0; l < MaxFilterOrder; l++)
-							{
+		
+		int id = omp_get_thread_num();
+		int num_threads = omp_get_num_threads();
 
-								LoadLeft = u - l;
-								LoadRight = u + l;
-								if ((LoadLeft >= 0))
+		int ImageIntergerShift;
+		float ImageShiftAmount;
+		float* ImageDelay = new float[1];
+		float* LightFieldSizeInverse = new float[1];
+		*(LightFieldSizeInverse) = (float)1 / Data.X;
+
+		float* ImageStart;
+		__m256 filterCoef, DelayReg, DelayRegPower;
+		__m256 Accumilation[7], InputDataLeft, InputDataRight, SymmetricAdd;
+		__m256 ColumnSumAccumilator, Divider;
+		Divider = _mm256_broadcast_ss(LightFieldSizeInverse);
+		int MaxFilterOrder = 25;
+		//Check if Filter is Odd or Even
+		int FilterNoCheck;
+		//size of each filter
+		int ThisFilterSize;
+		//Calculate Row for the Convolution
+		int LoadLeft;
+		int LoadRight;
+		int ConvolutionFilterIndex;
+		/*Here in this code y iterates through image columns and x iterates through image Rows.*/
+
+		{
+			for (int y = id; y < Data.Y; y+=num_threads)
+			{
+				for (int v = 0; v < Data.V; v += 8)
+				{
+					for (int u = 0; u < Data.U; u++)
+					{
+						ColumnSumAccumilator = _mm256_setzero_ps();
+						for (int x = 0; x < Data.X; x++)
+						{
+							ImageShiftAmount = ShiftAmount*x;
+							ImageIntergerShift = round(ImageShiftAmount);
+							*ImageDelay = ImageShiftAmount - ImageIntergerShift;
+							ImageStart = In + (Data.V*Data.U*x) + (Data.V*Data.U*Data.X*y);
+							DelayReg = _mm256_broadcast_ss(ImageDelay);
+							DelayRegPower = _mm256_broadcast_ss(ImageDelay);
+							Accumilation[0] = _mm256_loadu_ps(PickRow(u, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
+							if (*ImageDelay != 0)
+							{
+								for (int l = 0; l < MaxFilterOrder; l++)
 								{
-									InputDataLeft = _mm256_loadu_ps(PickRow(LoadLeft, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
-								}
-								else
-								{
-									LoadLeft = u - LoadLeft - 1;
-									InputDataLeft = _mm256_loadu_ps(PickRow(LoadLeft, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
-								}
-								if (l != 0)
-								{
-									if (LoadRight <= Data.U - 1)
+
+									LoadLeft = u - l;
+									LoadRight = u + l;
+									if ((LoadLeft >= 0))
 									{
-										InputDataRight = _mm256_loadu_ps(PickRow(LoadRight, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
+										InputDataLeft = _mm256_loadu_ps(PickRow(LoadLeft, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
 									}
 									else
 									{
-										LoadRight = Data.U - (LoadRight - Data.U - 1);
-										InputDataRight = _mm256_loadu_ps(PickRow(LoadRight, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
+										LoadLeft = u - LoadLeft - 1;
+										InputDataLeft = _mm256_loadu_ps(PickRow(LoadLeft, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
 									}
-								}
-								for (int k = 1; k < Data.KernalNoOfFilters; k++)
-								{
-									if (l == 0)
+									if (l != 0)
 									{
-										Accumilation[k] = _mm256_setzero_ps();
-									}
-
-									ThisFilterSize = (*(FilterSize + k) - 1) / 2;
-									if (l <= ThisFilterSize)
-									{
-										filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*k) + ThisFilterSize - l));
-										FilterNoCheck = k % 2;
-										if (l != 0)
+										if (LoadRight <= Data.U - 1)
 										{
-											if (FilterNoCheck == 1)
-											{
-												SymmetricAdd = _mm256_sub_ps(InputDataRight, InputDataLeft);
-											}
-											else
-											{
-												SymmetricAdd = _mm256_add_ps(InputDataRight, InputDataLeft);
-											}
-											Accumilation[k] = _mm256_add_ps(_mm256_mul_ps(SymmetricAdd, filterCoef), Accumilation[k]);
+											InputDataRight = _mm256_loadu_ps(PickRow(LoadRight, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
 										}
 										else
 										{
-											Accumilation[k] = _mm256_add_ps(_mm256_mul_ps(InputDataLeft, filterCoef), Accumilation[k]);
+											LoadRight = Data.U - (LoadRight - Data.U - 1);
+											InputDataRight = _mm256_loadu_ps(PickRow(LoadRight, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
 										}
-										
-
 									}
-									if (l == MaxFilterOrder - 1)
+									for (int k = 1; k < Data.KernalNoOfFilters; k++)
 									{
-										Accumilation[k] = _mm256_mul_ps(DelayRegPower, Accumilation[k]);
-										DelayRegPower = _mm256_mul_ps(DelayRegPower, DelayReg);
-										Accumilation[0] = _mm256_add_ps(Accumilation[k], Accumilation[0]);
+										if (l == 0)
+										{
+											Accumilation[k] = _mm256_setzero_ps();
+										}
+
+										ThisFilterSize = (*(FilterSize + k) - 1) / 2;
+										if (l <= ThisFilterSize)
+										{
+											filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*k) + ThisFilterSize - l));
+											FilterNoCheck = k % 2;
+											if (l != 0)
+											{
+												if (FilterNoCheck == 1)
+												{
+													SymmetricAdd = _mm256_sub_ps(InputDataRight, InputDataLeft);
+												}
+												else
+												{
+													SymmetricAdd = _mm256_add_ps(InputDataRight, InputDataLeft);
+												}
+												Accumilation[k] = _mm256_add_ps(_mm256_mul_ps(SymmetricAdd, filterCoef), Accumilation[k]);
+											}
+											else
+											{
+												Accumilation[k] = _mm256_add_ps(_mm256_mul_ps(InputDataLeft, filterCoef), Accumilation[k]);
+											}
+
+
+										}
+										if (l == MaxFilterOrder - 1)
+										{
+											Accumilation[k] = _mm256_mul_ps(DelayRegPower, Accumilation[k]);
+											DelayRegPower = _mm256_mul_ps(DelayRegPower, DelayReg);
+											Accumilation[0] = _mm256_add_ps(Accumilation[k], Accumilation[0]);
+										}
 									}
 								}
 							}
+							ColumnSumAccumilator = _mm256_add_ps(ColumnSumAccumilator, Accumilation[0]);
 						}
-						ColumnSumAccumilator = _mm256_add_ps(ColumnSumAccumilator, Accumilation[0]);
-					}
-					ColumnSumAccumilator = _mm256_mul_ps(Divider, ColumnSumAccumilator);
-					_mm256_storeu_ps(Out + v + (Data.V*u) + (Data.V*Data.U*y), ColumnSumAccumilator);
-					if ((v + (Data.V*u) + (Data.V*Data.U*y)) < 51)
-					{
-						cout << "///" << *(Out + v + (Data.V*u) + (Data.V*Data.U*y));
+						ColumnSumAccumilator = _mm256_mul_ps(Divider, ColumnSumAccumilator);
+						_mm256_storeu_ps(Out + v + (Data.V*u) + (Data.V*Data.U*y), ColumnSumAccumilator);
 					}
 				}
 			}
