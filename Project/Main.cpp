@@ -13,6 +13,7 @@
 #include "omp.h"
 #include <errno.h>  
 #include <immintrin.h>
+#include <math.h>
 using namespace std;
 using namespace cv;
 
@@ -32,12 +33,12 @@ inline uint8_t getelement(DataIn data, int x, int v, int u, int y, uint8_t * __r
 	return dataElements[index];
 }
 void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float* Delay);
-
+void ColumnConvilutionIntegerShiftAVX(DataIn Data, float ShiftAmount, float* __restrict In, float* __restrict Out, size_t* FilterSize, float* __restrict FilterKernal);
 int main()
 {
 	const clock_t begin_time = clock();
 	int i;
-	double start, end, start1;
+	double start, end1, start1, start2, end2, end3;
 	errno_t err;
 	start1 = omp_get_wtime();
 	int elements;
@@ -80,7 +81,8 @@ int main()
 	int align = 32;
 	//float*  __restrict IntegerShiftedImage = (float*)malloc(size);;
 	_set_errno(0);
-	float*  __restrict IntegerShiftedImage = (float*)_aligned_malloc(size, align);
+	//float*  __restrict IntegerShiftedImage = (float*)_aligned_malloc(size, align);
+	float*  __restrict IntegerShiftedImage = new float[data.X*data.Y*data.U*data.V];
 	if (IntegerShiftedImage == NULL)
 	{
 		_get_errno(&err);
@@ -88,7 +90,7 @@ int main()
 	}
 	uint8_t* dataelements;
 	dataelements = (uint8_t*)thismat->getarraypointer();
-	cout << "The dimensions are  \n" << data.U << endl;
+	cout << "The dimensions are  \n" << data.V << endl;
 
 
 
@@ -125,7 +127,7 @@ int main()
 	}
 	int k = 0;
 	delete thismat;
-
+	end3 = omp_get_wtime();
 	start1 = omp_get_wtime();
 	//if (m != 0)
 	{
@@ -167,20 +169,25 @@ int main()
 			}
 		}
 	}
+	end1 = omp_get_wtime();
 	// Fractional Shift CPU
-	float* FractionalShifted = new float[data.U*data.V];
+	float* FractionalShifted = new float[data.U*data.V*data.Y];
 	float* Delay = new float[1];
 	*Delay = 0.4;
-	
-	
-	ConvolutionAVX(data, FilterCoefficients, FilterSizes, FractionalShifted, IntegerShiftedImage, Delay);
+
+	start2 = omp_get_wtime();
+	//ConvolutionAVX(data, FilterCoefficients, FilterSizes, FractionalShifted, IntegerShiftedImage, Delay);
+	end2 = omp_get_wtime();
 	// void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float Delay)
+	//(DataIn Data, float ShiftAmount, float* __restrict In, float* __restrict Out, int* FilterSize, float* __restrict FilterKernal)
+	ColumnConvilutionIntegerShiftAVX(data, 1.4, ReOrderedImage, FractionalShifted, FilterSizes, FilterCoefficients);
+	cout << "\n The data is good\n";
 	for (int g = 0; g < 50; g++)
 	{
 		cout << *(FractionalShifted + g) << " ";
 	}
 
-	end = omp_get_wtime();
+
 	int h;
 	float Temp;
 	for (int u = 0; u < data.U; u++)
@@ -199,10 +206,10 @@ int main()
 		}
 	}
 
-	out = Mat(data.U, data.V, CV_32FC1, FinalImage); //create an image
-	namedWindow("Refocused Image", CV_WINDOW_AUTOSIZE);
+	//out = Mat(data.U, data.V,CV_32FC1, FinalImage); //create an image
+	//namedWindow("Refocused Image", CV_WINDOW_AUTOSIZE);
 	//resizeWindow("Refocused Image", 600, 600);
-	imshow("Refocused Image", out); //display the image which is stored in the 'img' in the "MyWindow" window
+//	imshow("Refocused Image", out); //display the image which is stored in the 'img' in the "MyWindow" window
 
 	waitKey(0);  //wait infinite time for a keyress
 
@@ -233,8 +240,9 @@ int main()
 	cout << "\nThis is the number of dimensions  ";
 	cout << numberofdimension << endl;
 
-	cout << "Data preparation time " << (end - start);
-	cout << "\nInteger shift time " << (end - start1);
+	cout << "Data preparation time " << (end3 - start);
+	cout << "\nInteger shift time " << (end1 - start1);
+	cout << "\nFractional shift for time " << (end2 - start2);
 	cin >> h;
 
 
@@ -247,117 +255,257 @@ int main()
 
 void ConvolutionAVX(DataIn Data, float* FilterKernal, size_t* FilterSize, float *out, float *in, float* Delay)
 {
-	
-	__m256 filterCoef, DelayReg, DelayRegPower;
-	__m256 Accumilation[7], InputDataLeft, InputDataRight, SymmetricAdd;
-	__m256 ShiftEdge, ShiftEdgeReverse;
-	int PointerFilterCoefficient;
-	int offset, LoadPtr, RightPtr;
-	float *EdgeRight, *EdgeLeft;
-	EdgeLeft = new float[16];
-	EdgeRight = new float[16];
-	int LoadTemp;
-	float FilterCoefCheck;
-	float FilterNoCheck;
-	DelayReg = _mm256_broadcast_ss(Delay);
-	for (int u = 0; u < Data.U; u++)
+
+#pragma omp parallel
 	{
-		//To manage the edges
-		ShiftEdge = _mm256_loadu_ps(in + (Data.V*u));
-		ShiftEdgeReverse = _mm256_permute_ps(ShiftEdge, 27);
-		ShiftEdgeReverse = _mm256_permute2f128_ps(ShiftEdgeReverse, ShiftEdgeReverse, 1);
-		_mm256_storeu_ps(EdgeLeft, ShiftEdgeReverse);
-		_mm256_storeu_ps(EdgeLeft + 8, ShiftEdge);
-		ShiftEdge = _mm256_loadu_ps(in + (Data.V*(u + 1)) - 8);
-		ShiftEdgeReverse = _mm256_permute_ps(ShiftEdge, 27);
-		ShiftEdgeReverse = _mm256_permute2f128_ps(ShiftEdgeReverse, ShiftEdgeReverse, 1);
-		_mm256_storeu_ps(EdgeRight, ShiftEdge);
-		_mm256_storeu_ps(EdgeRight + 8, ShiftEdgeReverse);
-		
-		for (int v = 0; v < Data.V; v+=8)
+		int X_shift, Y_shift;
+		int id = omp_get_thread_num();
+		int num_threads = omp_get_num_threads();
+		__m256 filterCoef, DelayReg, DelayRegPower;
+		__m256 Accumilation[7], InputDataLeft, InputDataRight, SymmetricAdd;
+		__m256 ShiftEdge, ShiftEdgeReverse;
+		int PointerFilterCoefficient;
+		int offset, LoadPtr, RightPtr;
+		float *EdgeRight, *EdgeLeft;
+		EdgeLeft = new float[16];
+		EdgeRight = new float[16];
+		int LoadTemp;
+		float FilterCoefCheck;
+		float FilterNoCheck;
+		DelayReg = _mm256_broadcast_ss(Delay);
+		for (int u = id; u < Data.U; u += num_threads)
 		{
-			offset = Data.V*u + v;
-			Accumilation[0] = _mm256_loadu_ps((in + offset));
-			DelayRegPower = _mm256_broadcast_ss(Delay);
-			for (int k = 1; k < Data.KernalNoOfFilters; k++)
+			//To manage the edges
+			ShiftEdge = _mm256_loadu_ps(in + (Data.V*u));
+			ShiftEdgeReverse = _mm256_permute_ps(ShiftEdge, 27);
+			ShiftEdgeReverse = _mm256_permute2f128_ps(ShiftEdgeReverse, ShiftEdgeReverse, 1);
+			_mm256_storeu_ps(EdgeLeft, ShiftEdgeReverse);
+			_mm256_storeu_ps(EdgeLeft + 8, ShiftEdge);
+			ShiftEdge = _mm256_loadu_ps(in + (Data.V*(u + 1)) - 8);
+			ShiftEdgeReverse = _mm256_permute_ps(ShiftEdge, 27);
+			ShiftEdgeReverse = _mm256_permute2f128_ps(ShiftEdgeReverse, ShiftEdgeReverse, 1);
+			_mm256_storeu_ps(EdgeRight, ShiftEdge);
+			_mm256_storeu_ps(EdgeRight + 8, ShiftEdgeReverse);
+
+			for (int v = 0; v < Data.V; v += 8)
 			{
-				Accumilation[k] = _mm256_setzero_ps();
-				PointerFilterCoefficient = k;
-				FilterNoCheck = k % 2;
-				for (int l = 0; l < ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) + 1; l++)
+				offset = Data.V*u + v;
+				Accumilation[0] = _mm256_loadu_ps((in + offset));
+				DelayRegPower = _mm256_broadcast_ss(Delay);
+				for (int k = 1; k < Data.KernalNoOfFilters; k++)
 				{
-					//if ((v >= (*(FilterSize + PointerFilterCoefficient) - 1) / 2) && (v <= ((Data.V - 1) - (*(FilterSize + PointerFilterCoefficient) - 1) / 2)))
+					Accumilation[k] = _mm256_setzero_ps();
+					PointerFilterCoefficient = k;
+					FilterNoCheck = k % 2;
+					for (int l = 0; l < ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) + 1; l++)
+					{
+						//if ((v >= (*(FilterSize + PointerFilterCoefficient) - 1) / 2) && (v <= ((Data.V - 1) - (*(FilterSize + PointerFilterCoefficient) - 1) / 2)))
 
-					LoadPtr = ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) - l;
-					filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + l));
-					FilterCoefCheck = *(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + l));
-					
-					if ((v >= LoadPtr))// && )
-					{
-						InputDataLeft = _mm256_loadu_ps((in + offset - LoadPtr));
-					}
-					else
-					{
-						LoadTemp = LoadPtr - v;
-						
-						if (LoadTemp <= 7)
-							InputDataLeft = _mm256_loadu_ps(EdgeLeft + 8 - LoadTemp);
-						else
+						LoadPtr = ((*(FilterSize + PointerFilterCoefficient) - 1) / 2) - l;
+						filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + l));
+						FilterCoefCheck = *(FilterKernal + ((Data.KernalFilterLength*PointerFilterCoefficient) + l));
+
+						if ((v >= LoadPtr))// && )
 						{
-							LoadTemp = LoadTemp - 7;
-							InputDataLeft = _mm256_loadu_ps((in + (Data.V*u)) + LoadTemp-1);
-							InputDataLeft = _mm256_permute_ps(InputDataLeft, 27);
-							InputDataLeft = _mm256_permute2f128_ps(InputDataLeft, InputDataLeft, 1);
-
-						}
-
-					}
-					
-					if (l == ((*(FilterSize + PointerFilterCoefficient) - 1) / 2))
-					{
-						Accumilation[k] = _mm256_add_ps(_mm256_mul_ps(InputDataLeft, filterCoef), Accumilation[k]);
-					}
-					else
-					{
-						if (((v + 7) <= ((Data.V - 1) - LoadPtr)))
-						{
-							InputDataRight = _mm256_loadu_ps((in + offset + LoadPtr));
+							InputDataLeft = _mm256_loadu_ps((in + offset - LoadPtr));
 						}
 						else
 						{
-							LoadTemp = v - (Data.V - 1) + LoadPtr;
-							if (LoadTemp <= 0)
+							LoadTemp = LoadPtr - v;
+
+							if (LoadTemp <= 7)
+								InputDataLeft = _mm256_loadu_ps(EdgeLeft + 8 - LoadTemp);
+							else
 							{
-								InputDataRight = _mm256_loadu_ps(EdgeRight + 7 + LoadTemp);
+								LoadTemp = LoadTemp - 7;
+								InputDataLeft = _mm256_loadu_ps((in + (Data.V*u)) + LoadTemp - 1);
+								InputDataLeft = _mm256_permute_ps(InputDataLeft, 27);
+								InputDataLeft = _mm256_permute2f128_ps(InputDataLeft, InputDataLeft, 1);
+
+							}
+
+						}
+
+						if (l == ((*(FilterSize + PointerFilterCoefficient) - 1) / 2))
+						{
+							Accumilation[k] = _mm256_add_ps(_mm256_mul_ps(InputDataLeft, filterCoef), Accumilation[k]);
+						}
+						else
+						{
+							if (((v + 7) <= ((Data.V - 1) - LoadPtr)))
+							{
+								InputDataRight = _mm256_loadu_ps((in + offset + LoadPtr));
 							}
 							else
 							{
-								InputDataRight = _mm256_loadu_ps(in + (Data.V*(u + 1) - 8) - (LoadTemp - 1));
-								InputDataRight = _mm256_permute_ps(InputDataRight, 27);
-								InputDataRight = _mm256_permute2f128_ps(InputDataRight, InputDataRight, 1);
+								LoadTemp = v - (Data.V - 1) + LoadPtr;
+								if (LoadTemp <= 0)
+								{
+									InputDataRight = _mm256_loadu_ps(EdgeRight + 7 + LoadTemp);
+								}
+								else
+								{
+									InputDataRight = _mm256_loadu_ps(in + (Data.V*(u + 1) - 8) - (LoadTemp - 1));
+									InputDataRight = _mm256_permute_ps(InputDataRight, 27);
+									InputDataRight = _mm256_permute2f128_ps(InputDataRight, InputDataRight, 1);
+								}
 							}
-						}
-						if (FilterNoCheck == 1)
-						{
+							if (FilterNoCheck == 1)
+							{
 								SymmetricAdd = _mm256_sub_ps(InputDataRight, InputDataLeft);
+							}
+							else
+							{
+								SymmetricAdd = _mm256_add_ps(InputDataRight, InputDataLeft);
+							}
+							Accumilation[k] = _mm256_add_ps(_mm256_mul_ps(SymmetricAdd, filterCoef), Accumilation[k]);
+
 						}
-						else
-						{
-							SymmetricAdd = _mm256_add_ps(InputDataRight, InputDataLeft);
-						}
-						Accumilation[k] = _mm256_add_ps(_mm256_mul_ps(SymmetricAdd, filterCoef), Accumilation[k]);
+
 
 					}
-
-
+					Accumilation[k] = _mm256_mul_ps(DelayRegPower, Accumilation[k]);
+					DelayRegPower = _mm256_mul_ps(DelayRegPower, DelayReg);
+					Accumilation[0] = _mm256_add_ps(Accumilation[k], Accumilation[0]);
 				}
-				Accumilation[k] = _mm256_mul_ps(DelayRegPower, Accumilation[k]);
-				DelayRegPower = _mm256_mul_ps(DelayRegPower, DelayReg);
-				Accumilation[0] = _mm256_add_ps(Accumilation[k], Accumilation[0]);
+				_mm256_storeu_ps(out + offset, Accumilation[0]);
 			}
-			_mm256_storeu_ps(out + offset, Accumilation[0]);
+		}
+
+	}
+}
+inline float* PickRow(size_t u, size_t v, float* ImageStart, int IntegerShift, int U, int V)
+{
+	if (u >= IntegerShift)
+	{
+		return ImageStart + V*(u - IntegerShift) + v;
+	}
+	else
+	{
+		return ImageStart + (V*(U - (IntegerShift - u))) + v;
+	}
+}
+void ColumnConvilutionIntegerShiftAVX(DataIn Data, float ShiftAmount, float* __restrict In, float* __restrict Out, size_t* FilterSize, float* __restrict FilterKernal)
+{
+	
+	int ImageIntergerShift;
+	float ImageShiftAmount;
+	float* ImageDelay= new float[1];
+	float* LightFieldSizeInverse = new float[1];
+	*LightFieldSizeInverse = 1 / 17;
+	cout << "tttttt " << *LightFieldSizeInverse << endl;
+	float* ImageStart;
+	__m256 filterCoef, DelayReg, DelayRegPower;
+	__m256 Accumilation[7], InputDataLeft, InputDataRight, SymmetricAdd;
+	__m256 ColumnSumAccumilator,Divider;
+	Divider = _mm256_broadcast_ss(LightFieldSizeInverse);
+	int MaxFilterOrder = 25;
+	//Check if Filter is Odd or Even
+	int FilterNoCheck;
+	//size of each filter
+	int ThisFilterSize;
+	//Calculate Row for the Convolution
+	int LoadLeft;
+	int LoadRight;
+	int ConvolutionFilterIndex;
+	/*Here in this code y iterates through image columns and x iterates through image Rows.*/
+	
+	{
+		for (int y = 0; y < Data.Y; y++)
+		{
+			for (int v = 0; v < Data.V; v += 8)
+			{
+				for (int u = 0; u < Data.U; u++)
+				{
+					ColumnSumAccumilator = _mm256_setzero_ps();
+					for (int x = 0; x < Data.X; x++)
+					{
+						ImageShiftAmount = ShiftAmount*x;
+						ImageIntergerShift = round(ImageShiftAmount);
+						*ImageDelay = ImageShiftAmount - ImageIntergerShift;
+						ImageStart = In + (Data.V*Data.U*x) + (Data.V*Data.U*Data.X*y);
+						DelayReg = _mm256_broadcast_ss(ImageDelay);
+						DelayRegPower = _mm256_broadcast_ss(ImageDelay);
+						Accumilation[0] = _mm256_loadu_ps(PickRow(u, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
+						if (*ImageDelay != 0)
+						{
+							for (int l = 0; l < MaxFilterOrder; l++)
+							{
+
+								LoadLeft = u - l;
+								LoadRight = u + l;
+								if ((LoadLeft >= 0))
+								{
+									InputDataLeft = _mm256_loadu_ps(PickRow(LoadLeft, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
+								}
+								else
+								{
+									LoadLeft = u - LoadLeft - 1;
+									InputDataLeft = _mm256_loadu_ps(PickRow(LoadLeft, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
+								}
+								if (l != 0)
+								{
+									if (LoadRight <= Data.U - 1)
+									{
+										InputDataRight = _mm256_loadu_ps(PickRow(LoadRight, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
+									}
+									else
+									{
+										LoadRight = Data.U - (LoadRight - Data.U - 1);
+										InputDataRight = _mm256_loadu_ps(PickRow(LoadRight, v, ImageStart, ImageIntergerShift, Data.U, Data.V));
+									}
+								}
+								for (int k = 1; k < Data.KernalNoOfFilters; k++)
+								{
+									if (l == 0)
+									{
+										Accumilation[k] = _mm256_setzero_ps();
+									}
+
+									ThisFilterSize = (*(FilterSize + k) - 1) / 2;
+									if (l <= ThisFilterSize)
+									{
+										filterCoef = _mm256_broadcast_ss(FilterKernal + ((Data.KernalFilterLength*k) + ThisFilterSize - l));
+										FilterNoCheck = k % 2;
+										if (l != 0)
+										{
+											if (FilterNoCheck == 1)
+											{
+												SymmetricAdd = _mm256_sub_ps(InputDataRight, InputDataLeft);
+											}
+											else
+											{
+												SymmetricAdd = _mm256_add_ps(InputDataRight, InputDataLeft);
+											}
+											Accumilation[k] = _mm256_add_ps(_mm256_mul_ps(SymmetricAdd, filterCoef), Accumilation[k]);
+										}
+										else
+										{
+											Accumilation[k] = _mm256_add_ps(_mm256_mul_ps(InputDataLeft, filterCoef), Accumilation[k]);
+										}
+										
+
+									}
+									if (l == MaxFilterOrder - 1)
+									{
+										Accumilation[k] = _mm256_mul_ps(DelayRegPower, Accumilation[k]);
+										DelayRegPower = _mm256_mul_ps(DelayRegPower, DelayReg);
+										Accumilation[0] = _mm256_add_ps(Accumilation[k], Accumilation[0]);
+									}
+								}
+							}
+						}
+						ColumnSumAccumilator = _mm256_add_ps(ColumnSumAccumilator, Accumilation[0]);
+					}
+					ColumnSumAccumilator = _mm256_mul_ps(Divider, ColumnSumAccumilator);
+					_mm256_storeu_ps(Out + v + (Data.V*u) + (Data.V*Data.U*y), ColumnSumAccumilator);
+					if ((v + (Data.V*u) + (Data.V*Data.U*y)) < 51)
+					{
+						cout << "///" << *(Out + v + (Data.V*u) + (Data.V*Data.U*y));
+					}
+				}
+			}
 		}
 	}
-
-
 }
+
